@@ -14,22 +14,22 @@ object HLog {
     }
 
     fun v(tag: String, message: String) {
-        loggerImpl?.verbose(tag, message)
+        loggerImpl?.v(tag, message)
     }
 
     fun d(tag: String, message: String) {
-        loggerImpl?.debug(tag, message)
+        loggerImpl?.d(tag, message)
     }
 
     fun i(tag: String, message: String) {
-        loggerImpl?.info(tag, message)
+        loggerImpl?.i(tag, message)
     }
 
     fun w(tag: String, message: String) {
-        loggerImpl?.warn(tag, message)
+        loggerImpl?.w(tag, message)
     }
 
     fun e(tag: String, message: String, throwable: Throwable? = null) {
-        loggerImpl?.error(tag, message, throwable)
+        loggerImpl?.e(tag, message, throwable)
     }
 }

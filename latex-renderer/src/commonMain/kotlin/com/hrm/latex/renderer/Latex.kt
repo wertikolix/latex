@@ -6,7 +6,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
@@ -53,15 +59,41 @@ fun Latex(
         backgroundColor = resolvedBackgroundColor
     )
 
-    val document = remember(latex) { runCatching { parser.parse(latex) }.getOrNull() }
+    // 异步解析状态
+    var document by remember { mutableStateOf<LatexNode.Document?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    // 当 latex 变化时，在后台线程解析
+    LaunchedEffect(latex, parser) {
+        withContext(Dispatchers.Default) {
+            try {
+                val result = parser.parse(latex)
+                withContext(Dispatchers.Main) {
+                    document = result
+                    error = null
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    error = e.message
+                    // 解析失败时，如果之前有结果，可以保留显示，或者置空
+                    // 这里选择置空以反馈错误
+                    document = null 
+                }
+            }
+        }
+    }
+
     if (document != null) {
         LatexDocument(
             modifier = modifier,
-            children = document.children,
+            children = document!!.children,
             style = resolvedStyle
         )
+    } else if (error != null) {
+        Text(text = "Error: $error", color = Color.Red, modifier = modifier)
     } else {
-        Text(text = "Invalid LaTeX", color = Color.Red, modifier = modifier)
+        // 解析中或空状态
+        // 可以选择显示一个占位符，或者什么都不显示
     }
 }
 

@@ -54,7 +54,8 @@ class LatexParser {
     }
 
     private fun isEOF(): Boolean {
-        return peek() is LatexToken.EOF
+        val token = peek()
+        return token == null || token is LatexToken.EOF
     }
 
     private fun expect(type: String): LatexToken {
@@ -220,7 +221,9 @@ class LatexParser {
         val index = if (peek() is LatexToken.LeftBracket) {
             advance() // [
             val indexNode = parseUntil { it is LatexToken.RightBracket }
-            expect("]")
+            if (!isEOF()) {
+                expect("]")
+            }
             LatexNode.Group(indexNode)
         } else {
             null
@@ -338,8 +341,9 @@ class LatexParser {
         }
 
         // 读取右括号
-        val rightToken = advance()
+        val rightToken = if (!isEOF()) advance() else null
         val right = when (rightToken) {
+            null -> ")"
             is LatexToken.Text -> rightToken.content
             is LatexToken.RightBrace -> "}"
             is LatexToken.Command -> {
@@ -717,7 +721,9 @@ class LatexParser {
             }
         }
 
-        expect("}")
+        if (!isEOF()) {
+            expect("}")
+        }
         return LatexNode.Group(children)
     }
 
