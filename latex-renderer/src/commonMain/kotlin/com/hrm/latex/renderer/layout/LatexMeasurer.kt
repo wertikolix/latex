@@ -9,6 +9,7 @@ import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.hrm.latex.parser.model.LatexNode
@@ -39,7 +40,7 @@ internal fun measureNode(
 ): NodeLayout {
     return when (node) {
         is LatexNode.Text -> measureText(node.content, style, measurer, density)
-        is LatexNode.TextMode -> measureText(node.text, style, measurer, density)
+        is LatexNode.TextMode -> measureTextMode(node.text, style, measurer, density)
         is LatexNode.Symbol -> measureText(
             node.unicode.ifEmpty { node.symbol },
             style,
@@ -191,7 +192,44 @@ private fun measureText(
     }
 }
 
-private fun measureSpace(type: LatexNode.Space.SpaceType, style: RenderStyle, density: Density): NodeLayout {
+/**
+ * 测量文本模式内容（\text{...}）
+ * 使用 Serif 字体和 Normal 样式，更适合在数学公式中显示普通文本
+ */
+private fun measureTextMode(
+    text: String,
+    style: RenderStyle,
+    measurer: TextMeasurer,
+    density: Density
+): NodeLayout {
+    // 为文本模式使用更合适的字体样式
+    val textModeStyle = style.copy(
+        fontStyle = FontStyle.Normal,
+        fontFamily = FontFamily.Serif,
+        // 如果当前是粗体，保持粗体；否则使用正常字重
+        fontWeight = style.fontWeight ?: FontWeight.Normal
+    )
+
+    val textStyle = textModeStyle.textStyle()
+    val result: TextLayoutResult = measurer.measure(
+        text = AnnotatedString(text),
+        style = textStyle
+    )
+
+    val width = result.size.width.toFloat()
+    val height = result.size.height.toFloat()
+    val baseline = result.firstBaseline
+
+    return NodeLayout(width, height, baseline) { x, y ->
+        drawText(result, topLeft = Offset(x, y))
+    }
+}
+
+private fun measureSpace(
+    type: LatexNode.Space.SpaceType,
+    style: RenderStyle,
+    density: Density
+): NodeLayout {
     val width = spaceWidthPx(style, type, density)
     return NodeLayout(width, 0f, 0f) { _, _ -> }
 }

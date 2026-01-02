@@ -43,3 +43,6 @@ include(":latex-base")
 include(":latex-parser")
 include(":latex-renderer")
 include(":latex-sdk")
+
+// Preview 模块（仅用于本地预览，不参与sdk打包）
+include(":latex-preview")

@@ -24,10 +24,10 @@ import com.hrm.latex.renderer.utils.parseColor
  */
 data class RenderStyle(
     val fontSize: TextUnit = 20.sp,
-    val color: Color = Color.Unspecified,
-    val darkColor: Color = Color.Unspecified,
-    val backgroundColor: Color = Color.Unspecified,
-    val darkBackgroundColor: Color = Color.Unspecified,
+    val color: Color = Color.Black,
+    val darkColor: Color = Color.White,
+    val backgroundColor: Color = Color.White,
+    val darkBackgroundColor: Color = Color.Black,
     val fontWeight: FontWeight? = null,
     val fontStyle: FontStyle? = null,
     val fontFamily: FontFamily? = null

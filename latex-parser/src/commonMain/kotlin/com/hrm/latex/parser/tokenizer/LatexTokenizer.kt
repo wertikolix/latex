@@ -56,6 +56,12 @@ class LatexTokenizer(private val input: String) {
                     tokens.add(LatexToken.Ampersand)
                     advance()
                 }
+                
+                '(', ')', '|' -> {
+                    // 将括号和竖线作为单独的文本token
+                    tokens.add(LatexToken.Text(char.toString()))
+                    advance()
+                }
 
                 '\n', '\r' -> handleNewLine()
                 ' ', '\t' -> handleWhitespace()
@@ -163,7 +169,8 @@ class LatexTokenizer(private val input: String) {
         val text = buildString {
             while (position < input.length) {
                 val char = peek() ?: break
-                if (char in setOf('\\', '{', '}', '[', ']', '^', '_', '&', '\n', '\r')) {
+                // 停止字符：特殊符号、空白字符、括号等
+                if (char in setOf('\\', '{', '}', '[', ']', '^', '_', '&', '\n', '\r', '(', ')', '|')) {
                     break
                 }
                 if (char == ' ' || char == '\t') {
