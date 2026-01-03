@@ -25,6 +25,8 @@ import com.hrm.latex.renderer.utils.Side
 import com.hrm.latex.renderer.utils.drawBracket
 import com.hrm.latex.renderer.utils.lineSpacingPx
 import com.hrm.latex.renderer.utils.mapBigOp
+import com.hrm.latex.renderer.utils.parseColor
+import com.hrm.latex.renderer.utils.parseDimension
 import com.hrm.latex.renderer.utils.spaceWidthPx
 import com.hrm.latex.renderer.utils.splitLines
 import kotlin.math.max
@@ -52,6 +54,7 @@ internal fun measureNode(
         is LatexNode.Command -> measureText(node.name, style, measurer)
 
         is LatexNode.Space -> measureSpace(node.type, style, density)
+        is LatexNode.HSpace -> measureHSpace(node, style, density)
         is LatexNode.NewLine -> NodeLayout(
             0f, lineSpacingPx(style, density), 0f
         ) { _, _ -> } // 换行符本身不绘制内容，在 Group 中处理
@@ -201,6 +204,13 @@ private fun measureSpace(
     type: LatexNode.Space.SpaceType, style: RenderStyle, density: Density
 ): NodeLayout {
     val width = spaceWidthPx(style, type, density)
+    return NodeLayout(width, 0f, 0f) { _, _ -> }
+}
+
+private fun measureHSpace(
+    node: LatexNode.HSpace, style: RenderStyle, density: Density
+): NodeLayout {
+    val width = parseDimension(node.dimension, style, density)
     return NodeLayout(width, 0f, 0f) { _, _ -> }
 }
 

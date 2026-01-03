@@ -6,9 +6,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Divider
+import androidx.compose.material3.DividerDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -49,7 +51,7 @@ fun Preview_Demo_RealTimeInput() {
                 color = MaterialTheme.colorScheme.error
             )
 
-            Divider()
+            HorizontalDivider(Modifier, DividerDefaults.Thickness, DividerDefaults.color)
 
             Text("实时渲染结果:", style = MaterialTheme.typography.bodyMedium)
             Latex(
@@ -92,8 +94,11 @@ fun Preview_Demo_ProgressTracking() {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             // 进度条
             LinearProgressIndicator(
-                progress = progress,
-                modifier = Modifier.fillMaxWidth()
+                progress = { progress },
+                modifier = Modifier.fillMaxWidth(),
+                color = ProgressIndicatorDefaults.linearColor,
+                trackColor = ProgressIndicatorDefaults.linearTrackColor,
+                strokeCap = ProgressIndicatorDefaults.LinearStrokeCap,
             )
 
             Text(
@@ -101,7 +106,7 @@ fun Preview_Demo_ProgressTracking() {
                 style = MaterialTheme.typography.bodySmall
             )
 
-            Divider()
+            HorizontalDivider(Modifier, DividerDefaults.Thickness, DividerDefaults.color)
 
             // 渲染结果
             Latex(
@@ -162,7 +167,7 @@ fun Preview_Demo_ErrorRecovery() {
                 }
 
                 if (label != testCases.last().first) {
-                    Divider()
+                    HorizontalDivider(Modifier, DividerDefaults.Thickness, DividerDefaults.color)
                 }
             }
         }
@@ -243,7 +248,7 @@ fun Preview_Demo_ComparisonWithStandard() {
                 }
             }
 
-            Divider()
+            HorizontalDivider(Modifier, DividerDefaults.Thickness, DividerDefaults.color)
 
             // 增量渲染（逐步输入）
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {

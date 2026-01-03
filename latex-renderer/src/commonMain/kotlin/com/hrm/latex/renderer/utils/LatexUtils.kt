@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import com.hrm.latex.parser.model.LatexNode
 import com.hrm.latex.parser.model.LatexNode.Space.SpaceType
 import com.hrm.latex.renderer.model.RenderStyle
@@ -44,8 +45,40 @@ fun spaceWidthPx(style: RenderStyle, type: SpaceType, density: Density): Float {
         SpaceType.QUAD -> 1f
         SpaceType.QQUAD -> 2f
         SpaceType.NORMAL -> 0.25f
+        SpaceType.NEGATIVE_THIN -> -0.166f
     }
     return with(density) { (style.fontSize * factor).toPx() }
+}
+
+/**
+ * 解析尺寸字符串 (如 "1cm", "10pt", "-5mm")
+ */
+fun parseDimension(dimension: String, style: RenderStyle, density: Density): Float {
+    val dim = dimension.trim()
+    if (dim.isEmpty()) return 0f
+    
+    // 正则提取数值和单位
+    // 简单解析，不支持复杂表达式
+    var numEnd = 0
+    while (numEnd < dim.length && (dim[numEnd].isDigit() || dim[numEnd] == '.' || dim[numEnd] == '-')) {
+        numEnd++
+    }
+    
+    val value = dim.substring(0, numEnd).toFloatOrNull() ?: 0f
+    val unit = dim.substring(numEnd).trim().lowercase()
+    
+    return with(density) {
+        when (unit) {
+            "pt" -> value.dp.toPx() // CSS pt ~= Android dp (approx) or use standard conversion
+            "px" -> value
+            "mm" -> (value * 3.78f).dp.toPx() // 1mm ~= 3.78px (at 96dpi) -> map to dp
+            "cm" -> (value * 37.8f).dp.toPx()
+            "in" -> (value * 96f).dp.toPx()
+            "em" -> style.fontSize.toPx() * value
+            "ex" -> style.fontSize.toPx() * 0.5f * value
+            else -> value.dp.toPx() // default to dp
+        }
+    }
 }
 
 /**

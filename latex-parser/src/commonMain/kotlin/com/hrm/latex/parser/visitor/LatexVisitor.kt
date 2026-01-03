@@ -19,6 +19,7 @@ interface LatexVisitor<T> {
     fun visitMatrix(node: LatexNode.Matrix): T
     fun visitArray(node: LatexNode.Array): T
     fun visitSpace(node: LatexNode.Space): T
+    fun visitHSpace(node: LatexNode.HSpace): T
     fun visitNewLine(node: LatexNode.NewLine): T
     fun visitSymbol(node: LatexNode.Symbol): T
     fun visitOperator(node: LatexNode.Operator): T
@@ -103,6 +104,8 @@ abstract class BaseLatexVisitor<T> : LatexVisitor<T> {
     
     override fun visitSpace(node: LatexNode.Space): T = defaultVisit(node)
     
+    override fun visitHSpace(node: LatexNode.HSpace): T = defaultVisit(node)
+
     override fun visitNewLine(node: LatexNode.NewLine): T = defaultVisit(node)
     
     override fun visitSymbol(node: LatexNode.Symbol): T = defaultVisit(node)
@@ -176,6 +179,7 @@ abstract class BaseLatexVisitor<T> : LatexVisitor<T> {
         is LatexNode.Matrix -> visitMatrix(node)
         is LatexNode.Array -> visitArray(node)
         is LatexNode.Space -> visitSpace(node)
+        is LatexNode.HSpace -> visitHSpace(node)
         is LatexNode.NewLine -> visitNewLine(node)
         is LatexNode.Symbol -> visitSymbol(node)
         is LatexNode.Operator -> visitOperator(node)

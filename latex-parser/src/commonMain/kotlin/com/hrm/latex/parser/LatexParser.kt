@@ -207,10 +207,25 @@ class LatexParser {
             ";" -> LatexNode.Space(LatexNode.Space.SpaceType.THICK)
             "quad" -> LatexNode.Space(LatexNode.Space.SpaceType.QUAD)
             "qquad" -> LatexNode.Space(LatexNode.Space.SpaceType.QQUAD)
+            "!" -> LatexNode.Space(LatexNode.Space.SpaceType.NEGATIVE_THIN)
+            "hspace" -> parseHSpace()
 
             // 特殊符号
             else -> parseSymbolOrGenericCommand(cmdName)
         }
+    }
+
+    /**
+     * 解析自定义空格 \hspace{...}
+     */
+    private fun parseHSpace(): LatexNode {
+        val arg = parseArgument()
+        val dimension = when (arg) {
+            is LatexNode.Text -> arg.content
+            is LatexNode.Group -> extractText(arg.children)
+            else -> "0pt"
+        }
+        return LatexNode.HSpace(dimension)
     }
 
     /**

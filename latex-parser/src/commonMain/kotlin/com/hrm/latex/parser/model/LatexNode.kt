@@ -93,9 +93,15 @@ sealed class LatexNode {
             THICK,      // \;
             QUAD,       // \quad
             QQUAD,      // \qquad
-            NORMAL      // normal space
+            NORMAL,     // normal space
+            NEGATIVE_THIN // \!
         }
     }
+    
+    /**
+     * 自定义水平空格节点 (\hspace)
+     */
+    data class HSpace(val dimension: String) : LatexNode()
     
     /**
      * 换行节点

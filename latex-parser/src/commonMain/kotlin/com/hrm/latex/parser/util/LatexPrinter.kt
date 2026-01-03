@@ -129,6 +129,16 @@ class LatexPrinter : BaseLatexVisitor<String>() {
         return ""
     }
     
+    override fun visitSpace(node: LatexNode.Space): String {
+        output.append("Space(${node.type})")
+        return ""
+    }
+    
+    override fun visitHSpace(node: LatexNode.HSpace): String {
+        output.append("HSpace(${node.dimension})")
+        return ""
+    }
+    
     override fun visitGroup(node: LatexNode.Group): String {
         output.append("Group(")
         node.children.forEachIndexed { i, child ->

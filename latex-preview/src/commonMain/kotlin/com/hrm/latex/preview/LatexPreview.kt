@@ -916,6 +916,19 @@ val previewGroups = listOf(
             ),
         )
     ),
+    PreviewGroup(
+        id = "spaces",
+        title = "9. 间距专题",
+        description = "负空格、自定义空格、水平间距",
+        items = listOf(
+            PreviewItem("70", "标准空格对比", "a \\, b \\: c \\; d \\quad e \\qquad f"),
+            PreviewItem("71", "负空格", "a \\! b (tight)"),
+            PreviewItem("72", "自定义空格 (cm)", "a \\hspace{1cm} b"),
+            PreviewItem("73", "自定义空格 (pt)", "a \\hspace{20pt} b"),
+            PreviewItem("74", "自定义空格 (em)", "a \\hspace{2em} b"),
+            PreviewItem("75", "负自定义空格", "a \\hspace{-0.5em} b"),
+        )
+    ),
 )
 
 // ========== 主界面 ==========
