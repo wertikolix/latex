@@ -21,6 +21,7 @@ import com.hrm.latex.parser.tokenizer.LatexTokenizer
 class LatexParser : LatexParserContext {
 
     override lateinit var tokenStream: LatexTokenStream
+    override val customCommands: MutableMap<String, com.hrm.latex.parser.component.CustomCommand> = mutableMapOf()
     private lateinit var environmentParser: EnvironmentParser
     private lateinit var commandParser: CommandParser
 

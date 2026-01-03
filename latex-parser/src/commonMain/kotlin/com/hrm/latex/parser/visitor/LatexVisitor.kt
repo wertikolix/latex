@@ -222,6 +222,12 @@ abstract class BaseLatexVisitor<T> : LatexVisitor<T> {
         return defaultVisit(node)
     }
     
+    open fun visitNewCommand(node: LatexNode.NewCommand): T {
+        // NewCommand 节点不参与渲染，只是定义记录
+        // 但定义中的内容可能需要访问（用于分析）
+        return defaultVisit(node)
+    }
+    
     /**
      * 访问任意节点
      */
@@ -261,5 +267,6 @@ abstract class BaseLatexVisitor<T> : LatexVisitor<T> {
         is LatexNode.TextMode -> visitTextMode(node)
         is LatexNode.Boxed -> visitBoxed(node)
         is LatexNode.Phantom -> visitPhantom(node)
+        is LatexNode.NewCommand -> visitNewCommand(node)
     }
 }

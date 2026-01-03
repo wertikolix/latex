@@ -80,6 +80,12 @@ internal fun measureNode(
         is LatexNode.Boxed, is LatexNode.Phantom ->
             specialEffectMeasurer.measure(node, style, measurer, density, measureGlobal, measureGroupRef)
 
+        is LatexNode.NewCommand -> NodeLayout(
+            width = 0f,
+            height = 0f,
+            baseline = 0f
+        ) { _, _ -> /* NewCommand 不渲染 */ }
+
         is LatexNode.NewLine -> NodeLayout(
             0f, lineSpacingPx(style, density), 0f
         ) { _, _ -> }

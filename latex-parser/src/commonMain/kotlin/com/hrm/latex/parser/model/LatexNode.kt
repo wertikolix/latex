@@ -321,4 +321,17 @@ sealed class LatexNode {
      * 占据空间但不显示内容，用于对齐
      */
     data class Phantom(val content: List<LatexNode>) : LatexNode()
+    
+    /**
+     * 自定义命令定义节点（\newcommand）
+     * 该节点不参与渲染，仅用于记录命令定义
+     * @param commandName 命令名（不含反斜杠）
+     * @param numArgs 参数个数（0-9）
+     * @param definition 命令定义（AST 节点列表）
+     */
+    data class NewCommand(
+        val commandName: String,
+        val numArgs: Int,
+        val definition: List<LatexNode>
+    ) : LatexNode()
 }

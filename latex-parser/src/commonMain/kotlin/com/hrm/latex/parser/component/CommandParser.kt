@@ -21,6 +21,12 @@ class CommandParser(
     fun parseCommand(cmdName: String): LatexNode? {
         HLog.d(TAG, "解析命令: \\$cmdName")
 
+        // 优先检查自定义命令
+        val customCmd = context.customCommands[cmdName]
+        if (customCmd != null) {
+            return expandCustomCommand(customCmd)
+        }
+
         return when (cmdName) {
             // 分数
             "frac", "dfrac", "tfrac", "cfrac" -> parseFraction()
@@ -112,6 +118,9 @@ class CommandParser(
             // 特殊效果
             "boxed" -> parseBoxed()
             "phantom" -> parsePhantom()
+
+            // 自定义命令
+            "newcommand" -> parseNewCommand()
 
             // 特殊符号
             else -> parseSymbolOrGenericCommand(cmdName)
@@ -433,6 +442,64 @@ class CommandParser(
         return LatexNode.Phantom(content)
     }
 
+    /**
+     * 解析 \newcommand{\cmdname}[numArgs]{definition}
+     * 支持的格式:
+     * - \newcommand{\R}{\mathbb{R}}  # 无参数
+     * - \newcommand{\diff}[1]{\frac{d}{d#1}}  # 1个参数
+     * - \newcommand{\pdiff}[2]{\frac{\partial #1}{\partial #2}}  # 2个参数
+     */
+    private fun parseNewCommand(): LatexNode {
+        // 解析命令名 {\commandName}
+        val nameArg = context.parseArgument() ?: return LatexNode.Text("")
+        val commandName = extractCommandName(nameArg)
+        
+        // 解析参数个数 [numArgs]（可选）
+        var numArgs = 0
+        if (tokenStream.peek() is LatexToken.LeftBracket) {
+            tokenStream.advance() // [
+            val numNodes = parseUntil { it is LatexToken.RightBracket }
+            if (!tokenStream.isEOF()) {
+                tokenStream.expect("]")
+            }
+            numArgs = extractText(numNodes).toIntOrNull() ?: 0
+        }
+        
+        // 解析定义 {definition}
+        val defArg = context.parseArgument() ?: return LatexNode.Text("")
+        val definition = when (defArg) {
+            is LatexNode.Group -> defArg.children
+            else -> listOf(defArg)
+        }
+        
+        // 注册自定义命令到上下文
+        context.customCommands[commandName] = CustomCommand(commandName, numArgs, definition)
+        
+        HLog.d(TAG, "注册自定义命令: \\$commandName[$numArgs]")
+        
+        // 返回 NewCommand 节点（不参与渲染）
+        return LatexNode.NewCommand(commandName, numArgs, definition)
+    }
+    
+    /**
+     * 从节点中提取命令名（去除反斜杠）
+     */
+    private fun extractCommandName(node: LatexNode): String {
+        return when (node) {
+            is LatexNode.Text -> node.content.removePrefix("\\").removeSuffix(" ")
+            is LatexNode.Group -> {
+                if (node.children.isNotEmpty()) {
+                    extractCommandName(node.children[0])
+                } else {
+                    ""
+                }
+            }
+            is LatexNode.Command -> node.name
+            is LatexNode.Symbol -> node.symbol
+            else -> ""
+        }
+    }
+
     private fun parseSymbolOrGenericCommand(cmdName: String): LatexNode {
         val unicode = SymbolMap.getSymbol(cmdName)
         if (unicode != null) {
@@ -450,6 +517,120 @@ class CommandParser(
         }
 
         return LatexNode.Command(cmdName, arguments)
+    }
+    
+    /**
+     * 展开自定义命令
+     * 将 #1, #2, ... 替换为实际参数
+     */
+    private fun expandCustomCommand(customCmd: CustomCommand): LatexNode {
+        // 收集参数
+        val args = mutableListOf<LatexNode>()
+        for (i in 0 until customCmd.numArgs) {
+            val arg = context.parseArgument() ?: LatexNode.Text("")
+            args.add(arg)
+        }
+        
+        // 替换定义中的参数占位符
+        val expanded = replaceParameters(customCmd.definition, args)
+        
+        // 返回 Group 包装展开的内容
+        return LatexNode.Group(expanded)
+    }
+    
+    /**
+     * 递归替换参数占位符 #1, #2, ...
+     */
+    private fun replaceParameters(nodes: List<LatexNode>, args: List<LatexNode>): List<LatexNode> {
+        return nodes.flatMap { node ->
+            when (node) {
+                is LatexNode.Text -> {
+                    // 替换 #1, #2, ... 为实际参数
+                    val text = node.content
+                    if (text.contains("#")) {
+                        val result = mutableListOf<LatexNode>()
+                        var i = 0
+                        while (i < text.length) {
+                            if (text[i] == '#' && i + 1 < text.length && text[i + 1].isDigit()) {
+                                val paramNum = text[i + 1].toString().toInt()
+                                if (paramNum > 0 && paramNum <= args.size) {
+                                    result.add(args[paramNum - 1])
+                                }
+                                i += 2
+                            } else {
+                                val start = i
+                                while (i < text.length && text[i] != '#') i++
+                                if (i > start) {
+                                    result.add(LatexNode.Text(text.substring(start, i)))
+                                }
+                            }
+                        }
+                        result
+                    } else {
+                        listOf(node)
+                    }
+                }
+                is LatexNode.Group -> listOf(LatexNode.Group(replaceParameters(node.children, args)))
+                is LatexNode.Fraction -> listOf(LatexNode.Fraction(
+                    replaceParametersInNode(node.numerator, args),
+                    replaceParametersInNode(node.denominator, args)
+                ))
+                is LatexNode.Root -> listOf(LatexNode.Root(
+                    replaceParametersInNode(node.content, args),
+                    node.index?.let { replaceParametersInNode(it, args) }
+                ))
+                is LatexNode.Superscript -> listOf(LatexNode.Superscript(
+                    replaceParametersInNode(node.base, args),
+                    replaceParametersInNode(node.exponent, args)
+                ))
+                is LatexNode.Subscript -> listOf(LatexNode.Subscript(
+                    replaceParametersInNode(node.base, args),
+                    replaceParametersInNode(node.index, args)
+                ))
+                is LatexNode.Style -> listOf(LatexNode.Style(
+                    replaceParameters(node.content, args),
+                    node.styleType
+                ))
+                is LatexNode.Delimited -> listOf(LatexNode.Delimited(
+                    node.left,
+                    node.right,
+                    replaceParameters(node.content, args),
+                    node.scalable,
+                    node.manualSize
+                ))
+                is LatexNode.Command -> {
+                    // 检查是否是另一个自定义命令需要展开
+                    val nestedCmd = context.customCommands[node.name]
+                    if (nestedCmd != null) {
+                        // 如果是嵌套的自定义命令，递归展开
+                        val nestedArgs = mutableListOf<LatexNode>()
+                        node.arguments.forEach { arg ->
+                            val expanded = replaceParametersInNode(arg, args)
+                            nestedArgs.add(expanded)
+                        }
+                        replaceParameters(nestedCmd.definition, nestedArgs)
+                    } else {
+                        // 不是自定义命令，只处理参数中的文本
+                        val expandedArgs = node.arguments.map { replaceParametersInNode(it, args) }
+                        listOf(LatexNode.Command(node.name, expandedArgs))
+                    }
+                }
+                else -> listOf(node)
+            }
+        }
+    }
+    
+    /**
+     * 替换单个节点中的参数
+     */
+    private fun replaceParametersInNode(node: LatexNode, args: List<LatexNode>): LatexNode {
+        return when (node) {
+            is LatexNode.Group -> LatexNode.Group(replaceParameters(node.children, args))
+            else -> {
+                val replaced = replaceParameters(listOf(node), args)
+                if (replaced.size == 1) replaced[0] else LatexNode.Group(replaced)
+            }
+        }
     }
     
     private fun parseUntil(condition: (LatexToken) -> Boolean): List<LatexNode> {

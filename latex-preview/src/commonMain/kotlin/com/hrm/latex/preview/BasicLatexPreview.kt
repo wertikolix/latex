@@ -359,6 +359,23 @@ val basicLatexPreviewGroups = listOf(
         )
     ),
     PreviewGroup(
+        id = "custom_commands",
+        title = "8.7 自定义命令",
+        description = "newcommand 定义和使用",
+        items = listOf(
+            PreviewItem("85-1", "无参数命令", "\\newcommand{\\R}{\\mathbb{R}} x \\in \\R"),
+            PreviewItem("85-2", "单参数命令", "\\newcommand{\\diff}[1]{\\frac{d}{d#1}} \\diff{x}"),
+            PreviewItem("85-3", "双参数命令", "\\newcommand{\\pdiff}[2]{\\frac{\\partial #1}{\\partial #2}} \\pdiff{f}{x}"),
+            PreviewItem("85-4", "多个自定义命令", "\\newcommand{\\N}{\\mathbb{N}} \\newcommand{\\Z}{\\mathbb{Z}} \\N \\subset \\Z"),
+            PreviewItem("85-5", "嵌套命令", "\\newcommand{\\abs}[1]{\\left|#1\\right|} \\abs{x}"),
+            PreviewItem("85-6", "参数在文本中", "\\newcommand{\\test}[1]{a#1b} \\test{x}"),
+            PreviewItem("85-7", "复杂定义", "\\newcommand{\\myvec}[1]{\\boldsymbol{#1}} \\myvec{v} = \\myvec{u} + \\myvec{w}"),
+            PreviewItem("85-8", "数学符号", "\\newcommand{\\R}{\\mathbb{R}} \\newcommand{\\C}{\\mathbb{C}} \\R + \\C"),
+            PreviewItem("85-9", "组合其他命令", "\\newcommand{\\norm}[1]{\\left\\|#1\\right\\|} \\norm{x} = \\norm{\\vec{v}}"),
+            PreviewItem("85-10", "递归定义", "\\newcommand{\\fact}[1]{#1!} \\fact{n} = \\frac{\\fact{2n}}{(2n)!!}"),
+        )
+    ),
+    PreviewGroup(
         id = "spaces",
         title = "9. 间距专题",
         description = "负空格、自定义空格、水平间距",
