@@ -1,76 +1,47 @@
-This is a Kotlin Multiplatform project targeting Android, iOS, Web, Desktop (JVM).
+# Kotlin Multiplatform LaTeX Rendering Library
 
-* [/composeApp](./composeApp/src) is for code that will be shared across your Compose Multiplatform applications.
-  It contains several subfolders:
-  - [commonMain](./composeApp/src/commonMain/kotlin) is for code that’s common for all targets.
-  - Other folders are for Kotlin code that will be compiled for only the platform indicated in the folder name.
-    For example, if you want to use Apple’s CoreCrypto for the iOS part of your Kotlin app,
-    the [iosMain](./composeApp/src/iosMain/kotlin) folder would be the right place for such calls.
-    Similarly, if you want to edit the Desktop (JVM) specific part, the [jvmMain](./composeApp/src/jvmMain/kotlin)
-    folder is the appropriate location.
+这是一个基于 Kotlin Multiplatform (KMP) 开发的高性能 LaTeX 数学公式解析与渲染库。支持在 Android, iOS, Desktop (JVM) 和 Web (Wasm/JS) 平台上实现一致的渲染效果。
 
-* [/iosApp](./iosApp/iosApp) contains iOS applications. Even if you’re sharing your UI with Compose Multiplatform,
-  you need this entry point for your iOS app. This is also where you should add SwiftUI code for your project.
+## 🌟 核心特性
 
-### Build and Run Android Application
+- **完整语法支持**：涵盖 100+ 希腊字母、基础算术、矩阵、环境（align, cases, array 等）。
+- **自定义命令 (New!)**：支持 `\newcommand` 宏定义，包括参数替换（#1-#9）、嵌套定义和命令覆盖。
+- **高性能解析**：基于 AST 的递归下降解析器，支持增量更新。
+- **多平台一致性**：使用 Compose Multiplatform 实现跨平台 UI 渲染。
+- **化学公式支持**：内置 `\ce{...}` 插件支持。
+- **样式定制**：支持颜色（`\color`）、方框（`\boxed`）和数学模式切换（`\displaystyle` 等）。
 
-To build and run the development version of the Android app, use the run configuration from the run widget
-in your IDE’s toolbar or build it directly from the terminal:
-- on macOS/Linux
-  ```shell
-  ./gradlew :composeApp:assembleDebug
-  ```
-- on Windows
-  ```shell
-  .\gradlew.bat :composeApp:assembleDebug
-  ```
+## 📸 渲染预览
 
-### Build and Run Desktop (JVM) Application
+项目包含一个演示 App (`composeApp`)，展示了各种复杂的 LaTeX 场景：
 
-To build and run the development version of the desktop app, use the run configuration from the run widget
-in your IDE’s toolbar or run it directly from the terminal:
-- on macOS/Linux
-  ```shell
-  ./gradlew :composeApp:run
-  ```
-- on Windows
-  ```shell
-  .\gradlew.bat :composeApp:run
-  ```
+- **基础数学**：`\frac{-b \pm \sqrt{b^2 - 4ac}}{2a}`
+- **矩阵与对齐**：`\begin{pmatrix} a & b \\ c & d \end{pmatrix}`
+- **自定义宏**：`\newcommand{\R}{\mathbb{R}} x \in \R`
 
-### Build and Run Web Application
+## 🏗️ 项目结构
 
-To build and run the development version of the web app, use the run configuration from the run widget
-in your IDE's toolbar or run it directly from the terminal:
-- for the Wasm target (faster, modern browsers):
-  - on macOS/Linux
-    ```shell
-    ./gradlew :composeApp:wasmJsBrowserDevelopmentRun
-    ```
-  - on Windows
-    ```shell
-    .\gradlew.bat :composeApp:wasmJsBrowserDevelopmentRun
-    ```
-- for the JS target (slower, supports older browsers):
-  - on macOS/Linux
-    ```shell
-    ./gradlew :composeApp:jsBrowserDevelopmentRun
-    ```
-  - on Windows
-    ```shell
-    .\gradlew.bat :composeApp:jsBrowserDevelopmentRun
-    ```
+- `:latex-base`: 基础数据结构和接口。
+- `:latex-parser`: 核心解析引擎，负责将 LaTeX 字符串转换为 AST。
+- `:latex-renderer`: 负责将 AST 渲染为 Compose UI 组件。
+- `:latex-preview`: 预览组件和示例数据集。
+- `:composeApp`: 跨平台 Demo 应用程序。
 
-### Build and Run iOS Application
+## 🚀 快速开始
 
-To build and run the development version of the iOS app, use the run configuration from the run widget
-in your IDE’s toolbar or open the [/iosApp](./iosApp) directory in Xcode and run it from there.
+### 运行 Demo App
 
----
+- **Android**: `./gradlew :composeApp:assembleDebug`
+- **Desktop**: `./gradlew :composeApp:run`
+- **Web (Wasm)**: `./gradlew :composeApp:wasmJsBrowserDevelopmentRun`
+- **iOS**: 在 Xcode 中打开 `iosApp/iosApp.xcworkspace` 运行。
 
-Learn more about [Kotlin Multiplatform](https://www.jetbrains.com/help/kotlin-multiplatform-dev/get-started.html),
-[Compose Multiplatform](https://github.com/JetBrains/compose-multiplatform/#compose-multiplatform),
-[Kotlin/Wasm](https://kotl.in/wasm/)…
+### 运行测试
 
-We would appreciate your feedback on Compose/Web and Kotlin/Wasm in the public Slack channel [#compose-web](https://slack-chats.kotlinlang.org/c/compose-web).
-If you face any issues, please report them on [YouTrack](https://youtrack.jetbrains.com/newIssue?project=CMP).
+```bash
+./run_parser_tests.sh
+```
+
+## 📊 路线图与功能覆盖
+
+详细的功能支持列表请参阅：[PARSER_COVERAGE_ANALYSIS.md](./latex-parser/PARSER_COVERAGE_ANALYSIS.md)
