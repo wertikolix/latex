@@ -27,6 +27,7 @@ interface LatexVisitor<T> {
     fun visitManualSizedDelimiter(node: LatexNode.ManualSizedDelimiter): T
     fun visitAccent(node: LatexNode.Accent): T
     fun visitExtensibleArrow(node: LatexNode.ExtensibleArrow): T
+    fun visitStack(node: LatexNode.Stack): T
     fun visitStyle(node: LatexNode.Style): T
     fun visitColor(node: LatexNode.Color): T
     fun visitBigOperator(node: LatexNode.BigOperator): T
@@ -135,6 +136,13 @@ abstract class BaseLatexVisitor<T> : LatexVisitor<T> {
         return defaultVisit(node)
     }
     
+    override fun visitStack(node: LatexNode.Stack): T {
+        visit(node.base)
+        node.above?.let { visit(it) }
+        node.below?.let { visit(it) }
+        return defaultVisit(node)
+    }
+    
     override fun visitStyle(node: LatexNode.Style): T {
         node.content.forEach { visit(it) }
         return defaultVisit(node)
@@ -222,6 +230,7 @@ abstract class BaseLatexVisitor<T> : LatexVisitor<T> {
         is LatexNode.ManualSizedDelimiter -> visitManualSizedDelimiter(node)
         is LatexNode.Accent -> visitAccent(node)
         is LatexNode.ExtensibleArrow -> visitExtensibleArrow(node)
+        is LatexNode.Stack -> visitStack(node)
         is LatexNode.Style -> visitStyle(node)
         is LatexNode.Color -> visitColor(node)
         is LatexNode.BigOperator -> visitBigOperator(node)

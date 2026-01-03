@@ -82,6 +82,11 @@ class CommandParser(
             "xleftarrow" -> parseExtensibleArrow(LatexNode.ExtensibleArrow.Direction.LEFT)
             "xleftrightarrow" -> parseExtensibleArrow(LatexNode.ExtensibleArrow.Direction.BOTH)
 
+            // 堆叠
+            "overset" -> parseStack(hasAbove = true, hasBelow = false)
+            "underset" -> parseStack(hasAbove = false, hasBelow = true)
+            "stackrel" -> parseStack(hasAbove = true, hasBelow = false)
+
             // 颜色
             "color" -> parseColor()
             "textcolor" -> parseTextColor()
@@ -316,6 +321,30 @@ class CommandParser(
         val above = context.parseArgument() ?: LatexNode.Text("")
         
         return LatexNode.ExtensibleArrow(above, below, direction)
+    }
+
+    /**
+     * 解析堆叠命令
+     * 
+     * 语法:
+     * - \overset{上方内容}{基础内容}
+     * - \underset{下方内容}{基础内容}
+     * - \stackrel{上方内容}{基础内容}（与 overset 等效）
+     * 
+     * 例如: \overset{?}{=}  或  \underset{n \to \infty}{=}
+     */
+    private fun parseStack(hasAbove: Boolean, hasBelow: Boolean): LatexNode.Stack {
+        // 第一个参数是上方或下方内容
+        val firstArg = context.parseArgument() ?: LatexNode.Text("")
+        
+        // 第二个参数是基础内容
+        val base = context.parseArgument() ?: LatexNode.Text("")
+        
+        return if (hasAbove) {
+            LatexNode.Stack(base = base, above = firstArg, below = null)
+        } else {
+            LatexNode.Stack(base = base, above = null, below = firstArg)
+        }
     }
 
     /**

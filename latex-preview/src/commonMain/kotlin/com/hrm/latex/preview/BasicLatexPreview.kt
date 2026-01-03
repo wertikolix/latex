@@ -302,13 +302,26 @@ val basicLatexPreviewGroups = listOf(
             PreviewItem("69", "可扩展右箭头", "\\xrightarrow{f}"),
             PreviewItem("70", "可扩展左箭头", "\\xleftarrow{g}"),
             PreviewItem("71", "带下标箭头", "\\xrightarrow[n\\to\\infty]{\\text{极限}}"),
+            PreviewItem("72", "上堆叠", "A \\overset{?}{=} B"),
+            PreviewItem("73", "下堆叠", "\\underset{n \\to \\infty}{\\lim} f(x)"),
+            PreviewItem("74", "stackrel", "x \\stackrel{def}{=} y + 1"),
             PreviewItem(
-                "72",
+                "75",
+                "堆叠与箭头组合",
+                "A \\overset{f}{\\to} B \\underset{g}{\\to} C"
+            ),
+            PreviewItem(
+                "75-2",
+                "同一箭头上下堆叠",
+                "A \\overset{f}{\\underset{g}{\\to}} B"
+            ),
+            PreviewItem(
+                "76",
                 "复杂装饰组合",
                 "\\widehat{ABC} + \\overrightarrow{PQ} + \\cancel{X}"
             ),
             PreviewItem(
-                "73",
+                "77",
                 "物理学中的应用",
                 "\\vec{F} = m\\vec{a} \\quad \\cancel{E_1} + E_2"
             ),
@@ -319,13 +332,13 @@ val basicLatexPreviewGroups = listOf(
         title = "8.5 颜色专题",
         description = "文本颜色、公式着色",
         items = listOf(
-            PreviewItem("74", "基础颜色", "\\color{red}{红色} + \\color{blue}{蓝色}"),
-            PreviewItem("75", "textcolor 命令", "\\textcolor{green}{绿色文字}"),
-            PreviewItem("76", "公式中着色", "x + \\color{red}{y^2} = \\color{blue}{z}"),
-            PreviewItem("77", "分数着色", "\\frac{\\color{red}{a}}{\\color{blue}{b}}"),
-            PreviewItem("78", "多种颜色", "\\color{red}{R} \\color{orange}{O} \\color{yellow}{Y} \\color{green}{G} \\color{blue}{B}"),
-            PreviewItem("79", "强调重点", "E = mc^2 \\quad \\color{red}{(爱因斯坦质能方程)}"),
-            PreviewItem("80", "十六进制颜色", "\\color{#FF5733}{橙红色} \\color{#33FF57}{青绿色}"),
+            PreviewItem("78", "基础颜色", "\\color{red}{红色} + \\color{blue}{蓝色}"),
+            PreviewItem("79", "textcolor 命令", "\\textcolor{green}{绿色文字}"),
+            PreviewItem("80", "公式中着色", "x + \\color{red}{y^2} = \\color{blue}{z}"),
+            PreviewItem("81", "分数着色", "\\frac{\\color{red}{a}}{\\color{blue}{b}}"),
+            PreviewItem("82", "多种颜色", "\\color{red}{R} \\color{orange}{O} \\color{yellow}{Y} \\color{green}{G} \\color{blue}{B}"),
+            PreviewItem("83", "强调重点", "E = mc^2 \\quad \\color{red}{(爱因斯坦质能方程)}"),
+            PreviewItem("84", "十六进制颜色", "\\color{#FF5733}{橙红色} \\color{#33FF57}{青绿色}"),
         )
     ),
     PreviewGroup(

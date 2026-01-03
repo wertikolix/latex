@@ -4,6 +4,7 @@ import com.hrm.latex.parser.model.LatexNode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -352,5 +353,55 @@ class SimpleFormulaTest {
         // 检查是否包含颜色节点
         val hasColorNode = doc.children.any { it is LatexNode.Color }
         assertTrue(hasColorNode, "Should contain a Color node")
+    }
+
+    // ===== 堆叠测试 =====
+
+    @Test
+    fun testOverset() {
+        val doc = parser.parse("\\overset{?}{=}")
+        val stack = doc.children[0] as LatexNode.Stack
+        assertNotNull(stack.above, "Above content should not be null")
+        assertNull(stack.below, "Below content should be null")
+        // base 可能是 Group 包裹的内容
+        assertTrue(stack.base is LatexNode.Symbol || 
+                   stack.base is LatexNode.Text || 
+                   stack.base is LatexNode.Group)
+    }
+
+    @Test
+    fun testUnderset() {
+        val doc = parser.parse("\\underset{n \\to \\infty}{\\lim}")
+        val stack = doc.children[0] as LatexNode.Stack
+        assertNull(stack.above, "Above content should be null")
+        assertNotNull(stack.below, "Below content should not be null")
+    }
+
+    @Test
+    fun testStackrel() {
+        val doc = parser.parse("\\stackrel{def}{=}")
+        val stack = doc.children[0] as LatexNode.Stack
+        assertNotNull(stack.above, "Above content should not be null for stackrel")
+        assertNull(stack.below, "Below content should be null for stackrel")
+    }
+
+    @Test
+    fun testStackWithComplexContent() {
+        val doc = parser.parse("A \\overset{f}{\\longrightarrow} B")
+        assertTrue(doc.children.size >= 2)
+        val stack = doc.children.find { it is LatexNode.Stack } as? LatexNode.Stack
+        assertNotNull(stack, "Should contain a Stack node")
+    }
+
+    @Test
+    fun testNestedStack() {
+        val doc = parser.parse("\\overset{a}{\\underset{b}{c}}")
+        val outerStack = doc.children[0] as LatexNode.Stack
+        assertNotNull(outerStack.above)
+        // 基础内容是一个 Group，包含 \underset 节点
+        val base = outerStack.base
+        assertTrue(base is LatexNode.Group)
+        val innerStack = (base as LatexNode.Group).children.firstOrNull { it is LatexNode.Stack }
+        assertNotNull(innerStack, "Should contain a nested Stack node")
     }
 }

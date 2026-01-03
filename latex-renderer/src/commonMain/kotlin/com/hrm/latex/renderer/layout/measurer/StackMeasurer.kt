@@ -1,0 +1,159 @@
+package com.hrm.latex.renderer.layout.measurer
+
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.unit.Density
+import com.hrm.latex.parser.model.LatexNode
+import com.hrm.latex.renderer.layout.NodeLayout
+import com.hrm.latex.renderer.model.RenderStyle
+import com.hrm.latex.renderer.model.shrink
+import kotlin.math.max
+
+/**
+ * 堆叠渲染器，用于 \overset、\underset、\stackrel 等命令
+ */
+internal class StackMeasurer {
+
+    /**
+     * 测量并布局堆叠节点
+     *
+     * 布局结构（以 \overset 为例）：
+     * ```
+     *     上方内容 (紧贴基础内容上方)
+     *     基础内容
+     *     下方内容 (紧贴基础内容下方)
+     * ```
+     */
+    fun measure(
+        node: LatexNode.Stack,
+        style: RenderStyle,
+        measurer: TextMeasurer,
+        density: Density,
+        measureGlobal: (LatexNode, RenderStyle) -> NodeLayout,
+        measureGroup: (List<LatexNode>, RenderStyle) -> NodeLayout
+    ): NodeLayout {
+        // 先对 Stack 结构做规范化：\overset{a}{\underset{b}{X}} 会产生 Stack 套 Stack
+        // 如果不扁平化，会导致定位/贴合基于“已经堆叠后的盒子”，从而出现上下异常。
+        fun unwrapSingleGroup(node0: LatexNode): LatexNode {
+            var n = node0
+            while (n is LatexNode.Group && n.children.size == 1) {
+                n = n.children[0]
+            }
+            return n
+        }
+        fun merge(a: LatexNode?, b: LatexNode?): LatexNode? {
+            if (a == null) return b
+            if (b == null) return a
+            return LatexNode.Group(listOf(a, b))
+        }
+
+        var baseNode: LatexNode = unwrapSingleGroup(node.base)
+        var aboveNode: LatexNode? = node.above?.let { unwrapSingleGroup(it) }
+        var belowNode: LatexNode? = node.below?.let { unwrapSingleGroup(it) }
+
+        while (baseNode is LatexNode.Stack) {
+            val inner = baseNode
+            aboveNode = merge(aboveNode, inner.above?.let { unwrapSingleGroup(it) })
+            belowNode = merge(belowNode, inner.below?.let { unwrapSingleGroup(it) })
+            baseNode = unwrapSingleGroup(inner.base)
+        }
+
+        // 测量基础内容（保持原样式）- 包装成List确保作为整体渲染
+        val baseLayout = measureGroup(listOf(baseNode), style)
+
+        // 上下内容使用较小字体（0.7倍）
+        val scriptStyle = style.shrink(0.7f)
+
+        // 测量上方内容（如果有）- 包装成List
+        val aboveLayout = aboveNode?.let { measureGroup(listOf(it), scriptStyle) }
+
+        // 测量下方内容（如果有）- 包装成List
+        val belowLayout = belowNode?.let { measureGroup(listOf(it), scriptStyle) }
+
+        // 计算总宽度（取最宽的元素）
+        val totalWidth = max(
+            baseLayout.width,
+            max(aboveLayout?.width ?: 0f, belowLayout?.width ?: 0f)
+        )
+
+        // 不要用间距，尽量贴合
+        val gap = 0f
+
+        // \\overset/\\underset 在“关系符号/箭头”上应贴近符号中线（数学轴），而不是贴盒子的顶部/底部。
+        // 注意：命令参数在 parser 里通常会包一层 Group（例如 {\\to} 会变成 Group(children=[Symbol("to")]))，
+        // 所以这里要先解包“单子节点 Group”。
+        val centeredSymbols = setOf(
+            // 箭头
+            "rightarrow", "leftarrow", "leftrightarrow",
+            "Rightarrow", "Leftarrow", "Leftrightarrow",
+            "longrightarrow", "longleftarrow", "longleftrightarrow",
+            "uparrow", "downarrow", "updownarrow",
+            "Uparrow", "Downarrow", "Updownarrow",
+            "mapsto", "to",
+            // 关系符号
+            "equals", "neq", "approx", "equiv", "sim",
+            "leq", "geq", "ll", "gg",
+            "subset", "supset", "subseteq", "supseteq"
+        )
+
+        val isCenteredBase = (baseNode as? LatexNode.Symbol)?.symbol in centeredSymbols
+
+        // centered 符号（如箭头/等号）在 TextContentMeasurer 里会把 baseline 调到 height*0.85 来“上移居中”。
+        // 这会导致：如果我们用 height*0.5 当附着点，实际上是在贴“行高盒子”，而不是贴符号的墨迹。
+        // 这里用一个更稳定的启发式：从被抬高的 baseline 反推视觉中线。
+        // - 对箭头：baseline≈0.85h => 视觉中线更靠上，可用 (baseline - 0.45h) 近似
+        // - 对非 centered：仍按顶/底堆叠
+        val axis = if (isCenteredBase) baseLayout.baseline - baseLayout.height * 0.45f else 0f
+
+        // centered 符号的行高盒子上下留白很大：
+        // - 上方可以更激进地“拉近”
+        // - 下方必须保守，否则容易与箭头重叠
+        val aboveTighten = if (isCenteredBase) 0.35f else 0f
+        val belowLift = if (isCenteredBase) 0.10f else 0f
+
+        val attachAbove = if (isCenteredBase) axis else 0f
+        // 下方附着点用 baseline 附近更稳定：对 \to 这类符号 baseline 被抬高，接近符号下缘
+        val attachBelow = if (isCenteredBase) baseLayout.baseline + baseLayout.height * 0.02f else baseLayout.height
+
+        val baseY = 0f
+        // 上方：贴底后向下拉近；下方：贴顶后向上轻微拉近，并做最小下移防重叠
+        val aboveY = aboveLayout?.let { (attachAbove - gap - it.height) + it.height * aboveTighten }
+        val belowY = if (belowLayout != null) {
+            val raw = (attachBelow + gap) - belowLayout.height * belowLift
+            if (isCenteredBase) maxOf(raw, baseLayout.height * 0.55f) else raw
+        } else null
+
+        val top = minOf(
+            baseY,
+            aboveY ?: baseY,
+            belowY ?: baseY
+        )
+        val bottom = maxOf(
+            baseY + baseLayout.height,
+            (aboveY ?: baseY) + (aboveLayout?.height ?: 0f),
+            (belowY ?: baseY) + (belowLayout?.height ?: 0f)
+        )
+
+        val totalHeight = bottom - top
+        val baseline = (baseY + baseLayout.baseline) - top
+
+        return NodeLayout(totalWidth, totalHeight, baseline) { x, y ->
+            val offsetY = y - top
+
+            // 绘制基础内容（居中对齐）
+            val baseX = x + (totalWidth - baseLayout.width) / 2
+            baseLayout.draw(this, baseX, offsetY + baseY)
+
+            // 绘制上方内容（如果有，居中对齐，贴合附着点）
+            aboveLayout?.let { layout ->
+                val aboveX = x + (totalWidth - layout.width) / 2
+                layout.draw(this, aboveX, offsetY + (aboveY ?: 0f))
+            }
+
+            // 绘制下方内容（如果有，居中对齐，贴合附着点）
+            belowLayout?.let { layout ->
+                val belowX = x + (totalWidth - layout.width) / 2
+                layout.draw(this, belowX, offsetY + (belowY ?: 0f))
+            }
+        }
+    }
+}

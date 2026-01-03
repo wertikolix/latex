@@ -189,6 +189,15 @@ sealed class LatexNode {
     }
     
     /**
+     * 堆叠节点（在基础内容上方或下方添加内容）
+     */
+    data class Stack(
+        val base: LatexNode,     // 基础内容（必选）
+        val above: LatexNode?,   // 上方内容（可选）
+        val below: LatexNode?    // 下方内容（可选）
+    ) : LatexNode()
+    
+    /**
      * 字体样式节点
      */
     data class Style(
