@@ -11,8 +11,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
 import com.hrm.latex.parser.model.LatexNode
 import com.hrm.latex.renderer.layout.NodeLayout
-import com.hrm.latex.renderer.model.RenderStyle
+import com.hrm.latex.renderer.model.RenderContext
 import com.hrm.latex.renderer.model.textStyle
+import com.hrm.latex.renderer.utils.MathFontUtils
 import com.hrm.latex.renderer.utils.parseDimension
 import com.hrm.latex.renderer.utils.spaceWidthPx
 
@@ -26,24 +27,24 @@ internal class TextContentMeasurer : NodeMeasurer<LatexNode> {
     
     override fun measure(
         node: LatexNode,
-        style: RenderStyle,
+        context: RenderContext,
         measurer: TextMeasurer,
         density: Density,
-        measureGlobal: (LatexNode, RenderStyle) -> NodeLayout,
-        measureGroup: (List<LatexNode>, RenderStyle) -> NodeLayout
+        measureGlobal: (LatexNode, RenderContext) -> NodeLayout,
+        measureGroup: (List<LatexNode>, RenderContext) -> NodeLayout
     ): NodeLayout {
         return when (node) {
-            is LatexNode.Text -> measureText(node.content, style, measurer)
-            is LatexNode.TextMode -> measureTextMode(node.text, style, measurer)
-            is LatexNode.Symbol -> measureSymbol(node, style, measurer)
+            is LatexNode.Text -> measureText(node.content, context, measurer)
+            is LatexNode.TextMode -> measureTextMode(node.text, context, measurer)
+            is LatexNode.Symbol -> measureSymbol(node, context, measurer)
             is LatexNode.Operator -> measureText(
                 node.op,
-                style.copy(fontStyle = FontStyle.Normal, fontFamily = FontFamily.Serif),
+                context.copy(fontStyle = FontStyle.Normal, fontFamily = FontFamily.Serif),
                 measurer
             )
-            is LatexNode.Command -> measureText(node.name, style, measurer)
-            is LatexNode.Space -> measureSpace(node.type, style, density)
-            is LatexNode.HSpace -> measureHSpace(node, style, density)
+            is LatexNode.Command -> measureText(node.name, context, measurer)
+            is LatexNode.Space -> measureSpace(node.type, context, density)
+            is LatexNode.HSpace -> measureHSpace(node, context, density)
             is LatexNode.NewLine -> NodeLayout(0f, 0f, 0f) { _, _ -> } // 换行符本身不占用空间，由 measureGroup 处理
             else -> throw IllegalArgumentException("Unsupported node type: ${node::class.simpleName}")
         }
@@ -55,11 +56,28 @@ internal class TextContentMeasurer : NodeMeasurer<LatexNode> {
      * 使用 Compose 的 TextMeasurer 计算文本的宽高和基线。
      */
     private fun measureText(
-        text: String, style: RenderStyle, measurer: TextMeasurer
+        text: String, context: RenderContext, measurer: TextMeasurer
     ): NodeLayout {
-        val textStyle = style.textStyle()
+        // 1. 处理数学特殊字体变体 (如 \mathbb, \mathcal)
+        val transformedText = applyFontVariant(text, context.fontVariant)
+
+        // 2. 数学模式下的变量处理规范：
+        // - 字母 (A-Z, a-z) 默认使用斜体 (Italic)
+        // - 数字 (0-9) 和符号默认使用正体 (Normal)
+        // - 如果用户显式指定了样式（如 \mathrm, \mathbf），则遵循用户指定
+        val resolvedStyle = if (context.fontStyle == null && context.fontVariant == RenderContext.FontVariant.NORMAL) {
+            when {
+                transformedText.any { it.isLetter() } -> context.copy(fontStyle = FontStyle.Italic)
+                transformedText.any { it.isDigit() } -> context.copy(fontStyle = FontStyle.Normal)
+                else -> context
+            }
+        } else {
+            context
+        }
+
+        val textStyle = resolvedStyle.textStyle()
         val result: TextLayoutResult = measurer.measure(
-            text = AnnotatedString(text), style = textStyle
+            text = AnnotatedString(transformedText), style = textStyle
         )
 
         val width = result.size.width.toFloat()
@@ -74,14 +92,27 @@ internal class TextContentMeasurer : NodeMeasurer<LatexNode> {
     /**
      * 测量符号（Symbol）
      * 
-     * 对于箭头等符号，调整基线位置使其视觉上居中。
-     * 增大基线值可以让符号在整体布局中相对上移。
+     * 对于希腊字母等符号，遵循数学排版规范：
+     * - 小写希腊字母默认斜体
+     * - 大写希腊字母默认正体 (Standard LaTeX behavior)
      */
     private fun measureSymbol(
-        node: LatexNode.Symbol, style: RenderStyle, measurer: TextMeasurer
+        node: LatexNode.Symbol, context: RenderContext, measurer: TextMeasurer
     ): NodeLayout {
         val text = if (node.unicode.isEmpty()) node.symbol else node.unicode
-        val textStyle = style.textStyle()
+        
+        // 遵循数学排版规范应用样式
+        val resolvedStyle = if (context.fontStyle == null) {
+            when {
+                isLowercaseGreek(node.symbol) -> context.copy(fontStyle = FontStyle.Italic)
+                isUppercaseGreek(node.symbol) -> context.copy(fontStyle = FontStyle.Normal)
+                else -> context
+            }
+        } else {
+            context
+        }
+        
+        val textStyle = resolvedStyle.textStyle()
         val result: TextLayoutResult = measurer.measure(
             text = AnnotatedString(text), style = textStyle
         )
@@ -90,12 +121,7 @@ internal class TextContentMeasurer : NodeMeasurer<LatexNode> {
         val height = result.size.height.toFloat()
         val originalBaseline = result.firstBaseline
         
-        // 对于箭头和其他符号，调整基线使其视觉上居中
-        // 通过增大基线值（baseline = ascent），使符号在 measureGroup 的对齐中相对上移
-        // 因为 childY = y + (maxAscent - child.baseline)，baseline 越大，childY 越小，元素越靠上
         val baseline = if (isArrowOrCenteredSymbol(node.symbol)) {
-            // 将基线设置为较高的位置，使箭头相对上移以达到视觉居中
-            // 经过测试，0.85 可以让箭头与带下标的化学式较好地对齐
             height * 0.85f
         } else {
             originalBaseline
@@ -104,6 +130,36 @@ internal class TextContentMeasurer : NodeMeasurer<LatexNode> {
         return NodeLayout(width, height, baseline) { x, y ->
             drawText(result, topLeft = Offset(x, y))
         }
+    }
+
+    private fun applyFontVariant(text: String, variant: RenderContext.FontVariant): String {
+        return when (variant) {
+            RenderContext.FontVariant.BLACKBOARD_BOLD -> MathFontUtils.toBlackboardBold(text)
+            RenderContext.FontVariant.CALLIGRAPHIC -> MathFontUtils.toCalligraphic(text)
+            // 目前暂不支持 Fraktur 和 Script 的 Unicode 映射，保留原样
+            else -> text
+        }
+    }
+
+    /**
+     * 判断是否为小写希腊字母
+     */
+    private fun isLowercaseGreek(symbol: String): Boolean {
+        return symbol in setOf(
+            "alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta", "iota", "kappa",
+            "lambda", "mu", "nu", "xi", "omicron", "pi", "rho", "sigma", "tau", "upsilon", "phi",
+            "chi", "psi", "omega",
+            "varpi", "varrho", "varsigma", "vartheta", "varphi", "varepsilon"
+        )
+    }
+
+    /**
+     * 判断是否为大写希腊字母
+     */
+    private fun isUppercaseGreek(symbol: String): Boolean {
+        return symbol in setOf(
+            "Gamma", "Delta", "Theta", "Lambda", "Xi", "Pi", "Sigma", "Upsilon", "Phi", "Psi", "Omega"
+        )
     }
 
     /**
@@ -137,11 +193,11 @@ internal class TextContentMeasurer : NodeMeasurer<LatexNode> {
      * 文本模式下默认使用衬线字体 (Serif) 和正常字重，以区别于数学斜体。
      */
     private fun measureTextMode(
-        text: String, style: RenderStyle, measurer: TextMeasurer
+        text: String, context: RenderContext, measurer: TextMeasurer
     ): NodeLayout {
-        val textModeStyle = style.copy(
+        val textModeStyle = context.copy(
             fontStyle = FontStyle.Normal, fontFamily = FontFamily.Serif,
-            fontWeight = style.fontWeight ?: FontWeight.Normal
+            fontWeight = context.fontWeight ?: FontWeight.Normal
         )
 
         val textStyle = textModeStyle.textStyle()
@@ -162,9 +218,9 @@ internal class TextContentMeasurer : NodeMeasurer<LatexNode> {
      * 测量标准空格 (quad, qquad, thin, etc.)
      */
     private fun measureSpace(
-        type: LatexNode.Space.SpaceType, style: RenderStyle, density: Density
+        type: LatexNode.Space.SpaceType, context: RenderContext, density: Density
     ): NodeLayout {
-        val width = spaceWidthPx(style, type, density)
+        val width = spaceWidthPx(context, type, density)
         return NodeLayout(width, 0f, 0f) { _, _ -> }
     }
 
@@ -172,9 +228,9 @@ internal class TextContentMeasurer : NodeMeasurer<LatexNode> {
      * 测量自定义水平空格 (\hspace{...})
      */
     private fun measureHSpace(
-        node: LatexNode.HSpace, style: RenderStyle, density: Density
+        node: LatexNode.HSpace, context: RenderContext, density: Density
     ): NodeLayout {
-        val width = parseDimension(node.dimension, style, density)
+        val width = parseDimension(node.dimension, context, density)
         return NodeLayout(width, 0f, 0f) { _, _ -> }
     }
 }

@@ -12,7 +12,7 @@ import androidx.compose.ui.unit.sp
 import com.hrm.latex.base.LatexConstants
 import com.hrm.latex.parser.model.LatexNode
 import com.hrm.latex.renderer.layout.NodeLayout
-import com.hrm.latex.renderer.model.RenderStyle
+import com.hrm.latex.renderer.model.RenderContext
 import com.hrm.latex.renderer.model.grow
 import com.hrm.latex.renderer.model.shrink
 import com.hrm.latex.renderer.model.textStyle
@@ -32,19 +32,19 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
 
     override fun measure(
         node: LatexNode,
-        style: RenderStyle,
+        context: RenderContext,
         measurer: TextMeasurer,
         density: Density,
-        measureGlobal: (LatexNode, RenderStyle) -> NodeLayout,
-        measureGroup: (List<LatexNode>, RenderStyle) -> NodeLayout
+        measureGlobal: (LatexNode, RenderContext) -> NodeLayout,
+        measureGroup: (List<LatexNode>, RenderContext) -> NodeLayout
     ): NodeLayout {
         return when (node) {
-            is LatexNode.Fraction -> measureFraction(node, style, measurer, density, measureGroup)
-            is LatexNode.Root -> measureRoot(node, style, measurer, density, measureGroup)
-            is LatexNode.Superscript -> measureScript(node, style, measurer, density, measureGlobal, isSuper = true)
-            is LatexNode.Subscript -> measureScript(node, style, measurer, density, measureGlobal, isSuper = false)
-            is LatexNode.BigOperator -> measureBigOperator(node, style, measurer, density, measureGroup)
-            is LatexNode.Binomial -> measureBinomial(node, style, measurer, density, measureGroup)
+            is LatexNode.Fraction -> measureFraction(node, context, measurer, density, measureGroup)
+            is LatexNode.Root -> measureRoot(node, context, measurer, density, measureGroup)
+            is LatexNode.Superscript -> measureScript(node, context, measurer, density, measureGlobal, isSuper = true)
+            is LatexNode.Subscript -> measureScript(node, context, measurer, density, measureGlobal, isSuper = false)
+            is LatexNode.BigOperator -> measureBigOperator(node, context, measurer, density, measureGroup)
+            is LatexNode.Binomial -> measureBinomial(node, context, measurer, density, measureGroup)
             else -> throw IllegalArgumentException("Unsupported node type: ${node::class.simpleName}")
         }
     }
@@ -60,28 +60,28 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
      */
     private fun measureFraction(
         node: LatexNode.Fraction,
-        style: RenderStyle,
+        context: RenderContext,
         measurer: TextMeasurer,
         density: Density,
-        measureGroup: (List<LatexNode>, RenderStyle) -> NodeLayout
+        measureGroup: (List<LatexNode>, RenderContext) -> NodeLayout
     ): NodeLayout {
-        val childStyle = style.shrink(LatexConstants.FRACTION_SCALE_FACTOR)
+        val childStyle = context.shrink(LatexConstants.FRACTION_SCALE_FACTOR)
         val numeratorLayout = measureGroup(listOf(node.numerator), childStyle)
         val denominatorLayout = measureGroup(listOf(node.denominator), childStyle)
 
         val ruleThickness = with(density) {
-            (style.fontSize * LatexConstants.FRACTION_RULE_THICKNESS_RATIO).toPx()
+            (context.fontSize * LatexConstants.FRACTION_RULE_THICKNESS_RATIO).toPx()
         }
 
         val gap = with(density) {
-            (style.fontSize * LatexConstants.FRACTION_TOP_PADDING_RATIO).toPx()
+            (context.fontSize * LatexConstants.FRACTION_TOP_PADDING_RATIO).toPx()
         }
 
         val width = max(numeratorLayout.width, denominatorLayout.width) + gap
         val padding = gap / 2
 
         val axisHeight = with(density) {
-            (style.fontSize * LatexConstants.MATH_AXIS_HEIGHT_RATIO).toPx()
+            (context.fontSize * LatexConstants.MATH_AXIS_HEIGHT_RATIO).toPx()
         }
 
         val numeratorTop = 0f
@@ -97,7 +97,7 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
             numeratorLayout.draw(this, numeratorX, y + numeratorTop)
 
             drawLine(
-                color = style.color,
+                color = context.color,
                 start = Offset(x + padding, y + lineY + ruleThickness / 2),
                 end = Offset(x + width - padding, y + lineY + ruleThickness / 2),
                 strokeWidth = ruleThickness
@@ -118,24 +118,24 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
      */
     private fun measureRoot(
         node: LatexNode.Root,
-        style: RenderStyle,
+        context: RenderContext,
         measurer: TextMeasurer,
         density: Density,
-        measureGroup: (List<LatexNode>, RenderStyle) -> NodeLayout
+        measureGroup: (List<LatexNode>, RenderContext) -> NodeLayout
     ): NodeLayout {
-        val indexStyle = style.shrink(LatexConstants.ROOT_INDEX_SCALE_FACTOR)
+        val indexStyle = context.shrink(LatexConstants.ROOT_INDEX_SCALE_FACTOR)
 
-        val contentLayout = measureGroup(listOf(node.content), style)
+        val contentLayout = measureGroup(listOf(node.content), context)
         val indexLayout = node.index?.let { measureGroup(listOf(it), indexStyle) }
 
         val ruleThickness = with(density) {
-            (style.fontSize * LatexConstants.FRACTION_RULE_THICKNESS_RATIO).toPx()
+            (context.fontSize * LatexConstants.FRACTION_RULE_THICKNESS_RATIO).toPx()
         }
         val gap = ruleThickness * 2
         val extraTop = gap + ruleThickness
 
         val hookWidth = with(density) {
-            (style.fontSize * LatexConstants.ROOT_HOOK_WIDTH_RATIO).toPx()
+            (context.fontSize * LatexConstants.ROOT_HOOK_WIDTH_RATIO).toPx()
         }
 
         val indexWidth = indexLayout?.width ?: 0f
@@ -166,7 +166,7 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
 
             // 绘制顶部横线
             drawLine(
-                style.color, Offset(x + contentX, topY), Offset(x + width, topY), ruleThickness
+                context.color, Offset(x + contentX, topY), Offset(x + width, topY), ruleThickness
             )
 
             // 绘制 V 形钩子
@@ -176,7 +176,7 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
             p.lineTo(x + contentX - hookWidth * 0.8f, midY + ruleThickness)
             p.lineTo(x + contentX - hookWidth, midY + ruleThickness * 2)
 
-            drawPath(p, style.color, style = Stroke(ruleThickness))
+            drawPath(p, context.color, style = Stroke(ruleThickness))
         }
     }
 
@@ -187,25 +187,25 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
      */
     private fun measureScript(
         node: LatexNode,
-        style: RenderStyle,
+        context: RenderContext,
         measurer: TextMeasurer,
         density: Density,
-        measureGlobal: (LatexNode, RenderStyle) -> NodeLayout,
+        measureGlobal: (LatexNode, RenderContext) -> NodeLayout,
         isSuper: Boolean
     ): NodeLayout {
         val baseNode = if (isSuper) (node as LatexNode.Superscript).base else (node as LatexNode.Subscript).base
         val scriptNode = if (isSuper) (node as LatexNode.Superscript).exponent else (node as LatexNode.Subscript).index
 
-        val scriptStyle = style.shrink(LatexConstants.SCRIPT_SCALE_FACTOR)
+        val scriptStyle = context.shrink(LatexConstants.SCRIPT_SCALE_FACTOR)
 
-        val baseLayout = measureGlobal(baseNode, style)
+        val baseLayout = measureGlobal(baseNode, context)
         val scriptLayout = measureGlobal(scriptNode, scriptStyle)
 
         val superscriptShift = with(density) {
-            (style.fontSize * LatexConstants.SUPERSCRIPT_SHIFT_RATIO).toPx()
+            (context.fontSize * LatexConstants.SUPERSCRIPT_SHIFT_RATIO).toPx()
         }
         val subscriptShift = with(density) {
-            (style.fontSize * LatexConstants.SUBSCRIPT_SHIFT_RATIO).toPx()
+            (context.fontSize * LatexConstants.SUBSCRIPT_SHIFT_RATIO).toPx()
         }
 
         val scriptX = baseLayout.width + with(density) { 1.dp.toPx() }
@@ -247,10 +247,10 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
      */
     private fun measureBigOperator(
         node: LatexNode.BigOperator,
-        style: RenderStyle,
+        context: RenderContext,
         measurer: TextMeasurer,
         density: Density,
-        measureGroup: (List<LatexNode>, RenderStyle) -> NodeLayout
+        measureGroup: (List<LatexNode>, RenderContext) -> NodeLayout
     ): NodeLayout {
         val symbol = mapBigOp(node.operator)
         val isIntegral = node.operator.contains("int")
@@ -258,7 +258,7 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
         // 判断是否使用侧边模式（上下标在右侧）：
         // 1. 积分符号始终使用侧边模式
         // 2. 求和/乘积：只有在 displaystyle（大字体）下才使用上下模式
-        val useSideMode = isIntegral || style.fontSize < 16.sp
+        val useSideMode = isIntegral || context.fontSize < 16.sp
         
         // 根据模式调整运算符缩放
         val scaleFactor = when {
@@ -266,8 +266,8 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
             else -> 1.5f                   // displaystyle 上下模式：放大以突出
         }
         
-        val opStyle = style.grow(scaleFactor)
-        val limitStyle = style.shrink(0.8f)
+        val opStyle = context.grow(scaleFactor)
+        val limitStyle = context.shrink(0.8f)
 
         // 测量运算符符号
         val textStyle = opStyle.textStyle()
@@ -285,7 +285,7 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
 
         if (useSideMode) {
             // 侧边模式：上下标在右侧（类似普通上下标）
-            val gap = with(density) { (style.fontSize * 0.1f).toPx() }
+            val gap = with(density) { (context.fontSize * 0.1f).toPx() }
             val sUp = opLayout.height * 0.3f
             val sDown = opLayout.height * 0.2f
             val superRelBase = -sUp
@@ -313,7 +313,7 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
             }
         } else {
             // 显示模式：上下标在正上方和正下方（仅用于 displaystyle）
-            val spacing = with(density) { (style.fontSize * 0.1f).toPx() }
+            val spacing = with(density) { (context.fontSize * 0.1f).toPx() }
             val maxWidth = max(opLayout.width, max(superLayout?.width ?: 0f, subLayout?.width ?: 0f))
             
             val opTop = (superLayout?.height ?: 0f) + (if (superLayout != null) spacing else 0f)
@@ -337,28 +337,28 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
      */
     private fun measureBinomial(
         node: LatexNode.Binomial,
-        style: RenderStyle,
+        context: RenderContext,
         measurer: TextMeasurer,
         density: Density,
-        measureGroup: (List<LatexNode>, RenderStyle) -> NodeLayout
+        measureGroup: (List<LatexNode>, RenderContext) -> NodeLayout
     ): NodeLayout {
-        val childStyle = style.shrink(0.9f)
+        val childStyle = context.shrink(0.9f)
         val numLayout = measureGroup(listOf(node.top), childStyle)
         val denLayout = measureGroup(listOf(node.bottom), childStyle)
 
-        val gap = with(density) { (style.fontSize * 0.2f).toPx() }
+        val gap = with(density) { (context.fontSize * 0.2f).toPx() }
         val contentWidth = max(numLayout.width, denLayout.width)
         val height = numLayout.height + denLayout.height + gap
         val baseline = numLayout.height + gap / 2
 
-        val bracketWidth = with(density) { (style.fontSize * 0.4f).toPx() }
-        val strokeWidth = with(density) { (style.fontSize * 0.05f).toPx() }
+        val bracketWidth = with(density) { (context.fontSize * 0.4f).toPx() }
+        val strokeWidth = with(density) { (context.fontSize * 0.05f).toPx() }
         val width = contentWidth + bracketWidth * 2
 
         return NodeLayout(width, height, baseline) { x, y ->
             // 绘制左右括号
-            drawBracket(LatexNode.Matrix.MatrixType.PAREN, Side.LEFT, x, y, bracketWidth, height, strokeWidth, style.color)
-            drawBracket(LatexNode.Matrix.MatrixType.PAREN, Side.RIGHT, x + width - bracketWidth, y, bracketWidth, height, strokeWidth, style.color)
+            drawBracket(LatexNode.Matrix.MatrixType.PAREN, Side.LEFT, x, y, bracketWidth, height, strokeWidth, context.color)
+            drawBracket(LatexNode.Matrix.MatrixType.PAREN, Side.RIGHT, x + width - bracketWidth, y, bracketWidth, height, strokeWidth, context.color)
             
             // 绘制内容
             val numX = x + bracketWidth + (contentWidth - numLayout.width) / 2

@@ -11,7 +11,7 @@ import androidx.compose.ui.unit.dp
 import com.hrm.latex.parser.model.LatexNode
 import com.hrm.latex.parser.model.LatexNode.Accent.AccentType
 import com.hrm.latex.renderer.layout.NodeLayout
-import com.hrm.latex.renderer.model.RenderStyle
+import com.hrm.latex.renderer.model.RenderContext
 import com.hrm.latex.renderer.model.shrink
 import com.hrm.latex.renderer.model.textStyle
 import kotlin.math.max
@@ -26,13 +26,13 @@ internal class AccentMeasurer : NodeMeasurer<LatexNode.Accent> {
 
     override fun measure(
         node: LatexNode.Accent,
-        style: RenderStyle,
+        context: RenderContext,
         measurer: TextMeasurer,
         density: Density,
-        measureGlobal: (LatexNode, RenderStyle) -> NodeLayout,
-        measureGroup: (List<LatexNode>, RenderStyle) -> NodeLayout
+        measureGlobal: (LatexNode, RenderContext) -> NodeLayout,
+        measureGroup: (List<LatexNode>, RenderContext) -> NodeLayout
     ): NodeLayout {
-        val contentLayout = measureGroup(listOf(node.content), style)
+        val contentLayout = measureGroup(listOf(node.content), context)
 
         // 判断是否是宽装饰（需要横向拉伸）
         val isWideAccent = when (node.accentType) {
@@ -43,7 +43,7 @@ internal class AccentMeasurer : NodeMeasurer<LatexNode.Accent> {
         }
 
         if (isWideAccent) {
-            return measureWideAccent(node, contentLayout, style, density)
+            return measureWideAccent(node, contentLayout, context, density)
         }
 
         // 普通字符装饰
@@ -58,7 +58,7 @@ internal class AccentMeasurer : NodeMeasurer<LatexNode.Accent> {
         }
 
         val isUnder = node.accentType == AccentType.UNDERLINE || node.accentType == AccentType.UNDERBRACE
-        val accentStyle = style.shrink(0.8f)
+        val accentStyle = context.shrink(0.8f)
         val textStyle = accentStyle.textStyle()
         val result = measurer.measure(AnnotatedString(accentChar), textStyle)
         
@@ -98,7 +98,7 @@ internal class AccentMeasurer : NodeMeasurer<LatexNode.Accent> {
     private fun measureWideAccent(
         node: LatexNode.Accent,
         contentLayout: NodeLayout,
-        style: RenderStyle,
+        context: RenderContext,
         density: Density
     ): NodeLayout {
         val isUnder = node.accentType == AccentType.UNDERLINE ||
@@ -106,9 +106,9 @@ internal class AccentMeasurer : NodeMeasurer<LatexNode.Accent> {
 
         val accentHeight = when (node.accentType) {
             AccentType.OVERLINE, AccentType.UNDERLINE -> with(density) { 2f.dp.toPx() }
-            else -> with(density) { (style.fontSize * 0.3f).toPx() }
+            else -> with(density) { (context.fontSize * 0.3f).toPx() }
         }
-        val gap = with(density) { (style.fontSize * 0.08f).toPx() }
+        val gap = with(density) { (context.fontSize * 0.08f).toPx() }
 
         val width = contentLayout.width
         val totalHeight = contentLayout.height + accentHeight + gap
@@ -124,7 +124,7 @@ internal class AccentMeasurer : NodeMeasurer<LatexNode.Accent> {
             when (node.accentType) {
                 AccentType.OVERLINE -> {
                     drawLine(
-                        color = style.color,
+                        color = context.color,
                         start = Offset(x, accentY),
                         end = Offset(x + width, accentY),
                         strokeWidth = with(density) { 1.5f.dp.toPx() }
@@ -133,7 +133,7 @@ internal class AccentMeasurer : NodeMeasurer<LatexNode.Accent> {
 
                 AccentType.UNDERLINE -> {
                     drawLine(
-                        color = style.color,
+                        color = context.color,
                         start = Offset(x, accentY),
                         end = Offset(x + width, accentY),
                         strokeWidth = with(density) { 1.5f.dp.toPx() }
@@ -178,7 +178,7 @@ internal class AccentMeasurer : NodeMeasurer<LatexNode.Accent> {
                     }
                     drawPath(
                         path = path,
-                        color = style.color,
+                        color = context.color,
                         style = Stroke(width = with(density) { 1.2f.dp.toPx() })
                     )
                 }
@@ -221,7 +221,7 @@ internal class AccentMeasurer : NodeMeasurer<LatexNode.Accent> {
                     }
                     drawPath(
                         path = path,
-                        color = style.color,
+                        color = context.color,
                         style = Stroke(width = with(density) { 1.2f.dp.toPx() })
                     )
                 }
@@ -239,7 +239,7 @@ internal class AccentMeasurer : NodeMeasurer<LatexNode.Accent> {
                     }
                     drawPath(
                         path = path,
-                        color = style.color,
+                        color = context.color,
                         style = Stroke(width = with(density) { 1.5f.dp.toPx() })
                     )
                 }
@@ -250,7 +250,7 @@ internal class AccentMeasurer : NodeMeasurer<LatexNode.Accent> {
                     val arrowStartX = x
 
                     drawLine(
-                        color = style.color,
+                        color = context.color,
                         start = Offset(arrowStartX, arrowY),
                         end = Offset(arrowEndX, arrowY),
                         strokeWidth = with(density) { 1.5f.dp.toPx() }
@@ -263,7 +263,7 @@ internal class AccentMeasurer : NodeMeasurer<LatexNode.Accent> {
                         lineTo(arrowEndX - arrowHeadSize, arrowY + arrowHeadSize / 2)
                         close()
                     }
-                    drawPath(path = path, color = style.color)
+                    drawPath(path = path, color = context.color)
                 }
 
                 AccentType.OVERLEFTARROW -> {
@@ -272,7 +272,7 @@ internal class AccentMeasurer : NodeMeasurer<LatexNode.Accent> {
                     val arrowEndX = x + width
 
                     drawLine(
-                        color = style.color,
+                        color = context.color,
                         start = Offset(arrowStartX, arrowY),
                         end = Offset(arrowEndX, arrowY),
                         strokeWidth = with(density) { 1.5f.dp.toPx() }
@@ -285,13 +285,13 @@ internal class AccentMeasurer : NodeMeasurer<LatexNode.Accent> {
                         lineTo(arrowStartX + arrowHeadSize, arrowY + arrowHeadSize / 2)
                         close()
                     }
-                    drawPath(path = path, color = style.color)
+                    drawPath(path = path, color = context.color)
                 }
 
                 AccentType.CANCEL -> {
                     // 从左下角到右上角画斜线
                     drawLine(
-                        color = style.color,
+                        color = context.color,
                         start = Offset(x, contentY + contentLayout.height),
                         end = Offset(x + width, contentY),
                         strokeWidth = with(density) { 1.5f.dp.toPx() }

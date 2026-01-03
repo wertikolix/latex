@@ -9,7 +9,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.hrm.latex.parser.model.LatexNode
 import com.hrm.latex.renderer.layout.NodeLayout
-import com.hrm.latex.renderer.model.RenderStyle
+import com.hrm.latex.renderer.model.RenderContext
 import com.hrm.latex.renderer.model.shrink
 import kotlin.math.max
 
@@ -22,14 +22,14 @@ internal class ExtensibleArrowMeasurer {
 
     fun measure(
         node: LatexNode.ExtensibleArrow,
-        style: RenderStyle,
+        context: RenderContext,
         measurer: TextMeasurer,
         density: Density,
-        measureGlobal: (LatexNode, RenderStyle) -> NodeLayout,
-        measureGroup: (List<LatexNode>, RenderStyle) -> NodeLayout
+        measureGlobal: (LatexNode, RenderContext) -> NodeLayout,
+        measureGroup: (List<LatexNode>, RenderContext) -> NodeLayout
     ): NodeLayout {
         // 测量上方文字（必选）- 包装成List确保作为整体渲染
-        val aboveStyle = style.shrink(0.7f)
+        val aboveStyle = context.shrink(0.7f)
         val aboveLayout = measureGroup(listOf(node.content), aboveStyle)
 
         // 测量下方文字（可选）- 包装成List确保作为整体渲染
@@ -79,7 +79,7 @@ internal class ExtensibleArrowMeasurer {
                 startX = arrowStartX,
                 endX = arrowEndX,
                 centerY = y + arrowY + arrowStrokeHeight / 2,
-                color = style.color,
+                color = context.color,
                 density = density
             )
 

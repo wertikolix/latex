@@ -4,7 +4,7 @@ import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.unit.Density
 import com.hrm.latex.parser.model.LatexNode
 import com.hrm.latex.renderer.layout.NodeLayout
-import com.hrm.latex.renderer.model.RenderStyle
+import com.hrm.latex.renderer.model.RenderContext
 import com.hrm.latex.renderer.utils.Side
 import com.hrm.latex.renderer.utils.drawBracket
 import kotlin.math.max
@@ -22,21 +22,21 @@ internal class MatrixMeasurer : NodeMeasurer<LatexNode> {
 
     override fun measure(
         node: LatexNode,
-        style: RenderStyle,
+        context: RenderContext,
         measurer: TextMeasurer,
         density: Density,
-        measureGlobal: (LatexNode, RenderStyle) -> NodeLayout,
-        measureGroup: (List<LatexNode>, RenderStyle) -> NodeLayout
+        measureGlobal: (LatexNode, RenderContext) -> NodeLayout,
+        measureGroup: (List<LatexNode>, RenderContext) -> NodeLayout
     ): NodeLayout {
         return when (node) {
-            is LatexNode.Matrix -> measureMatrix(node, style, measurer, density, measureGlobal)
-            is LatexNode.Array -> measureMatrixLike(node.rows, style, measurer, density, measureGlobal)
-            is LatexNode.Cases -> measureCases(node, style, measurer, density, measureGlobal)
-            is LatexNode.Aligned -> measureAligned(node.rows, style, measurer, density, measureGlobal)
-            is LatexNode.Split -> measureAligned(node.rows, style, measurer, density, measureGlobal)
-            is LatexNode.Eqnarray -> measureEqnarray(node.rows, style, measurer, density, measureGlobal)
-            is LatexNode.Multline -> measureMultline(node, style, measurer, density, measureGlobal)
-            is LatexNode.Subequations -> measureSubequations(node, style, measurer, density, measureGlobal, measureGroup)
+            is LatexNode.Matrix -> measureMatrix(node, context, measurer, density, measureGlobal)
+            is LatexNode.Array -> measureMatrixLike(node.rows, context, measurer, density, measureGlobal)
+            is LatexNode.Cases -> measureCases(node, context, measurer, density, measureGlobal)
+            is LatexNode.Aligned -> measureAligned(node.rows, context, measurer, density, measureGlobal)
+            is LatexNode.Split -> measureAligned(node.rows, context, measurer, density, measureGlobal)
+            is LatexNode.Eqnarray -> measureEqnarray(node.rows, context, measurer, density, measureGlobal)
+            is LatexNode.Multline -> measureMultline(node, context, measurer, density, measureGlobal)
+            is LatexNode.Subequations -> measureSubequations(node, context, measurer, density, measureGlobal, measureGroup)
             else -> throw IllegalArgumentException("Unsupported node type: ${node::class.simpleName}")
         }
     }
@@ -49,26 +49,26 @@ internal class MatrixMeasurer : NodeMeasurer<LatexNode> {
      */
     private fun measureMatrix(
         node: LatexNode.Matrix,
-        style: RenderStyle,
+        context: RenderContext,
         measurer: TextMeasurer,
         density: Density,
-        measureGlobal: (LatexNode, RenderStyle) -> NodeLayout
+        measureGlobal: (LatexNode, RenderContext) -> NodeLayout
     ): NodeLayout {
-        val contentLayout = measureMatrixLike(node.rows, style, measurer, density, measureGlobal)
+        val contentLayout = measureMatrixLike(node.rows, context, measurer, density, measureGlobal)
         val bracketType = node.type
         if (bracketType == LatexNode.Matrix.MatrixType.PLAIN) return contentLayout
 
-        val bracketWidth = with(density) { (style.fontSize * 0.5f).toPx() }
-        val strokeWidth = with(density) { (style.fontSize * 0.05f).toPx() }
+        val bracketWidth = with(density) { (context.fontSize * 0.5f).toPx() }
+        val strokeWidth = with(density) { (context.fontSize * 0.05f).toPx() }
 
         val width = contentLayout.width + bracketWidth * 2
         val height = contentLayout.height
         val baseline = contentLayout.baseline
 
         return NodeLayout(width, height, baseline) { x, y ->
-            drawBracket(bracketType, Side.LEFT, x, y, bracketWidth, height, strokeWidth, style.color)
+            drawBracket(bracketType, Side.LEFT, x, y, bracketWidth, height, strokeWidth, context.color)
             contentLayout.draw(this, x + bracketWidth, y)
-            drawBracket(bracketType, Side.RIGHT, x + width - bracketWidth, y, bracketWidth, height, strokeWidth, style.color)
+            drawBracket(bracketType, Side.RIGHT, x + width - bracketWidth, y, bracketWidth, height, strokeWidth, context.color)
         }
     }
 
@@ -83,13 +83,13 @@ internal class MatrixMeasurer : NodeMeasurer<LatexNode> {
      */
     private fun measureMatrixLike(
         rows: List<List<LatexNode>>,
-        style: RenderStyle,
+        context: RenderContext,
         measurer: TextMeasurer,
         density: Density,
-        measureGlobal: (LatexNode, RenderStyle) -> NodeLayout
+        measureGlobal: (LatexNode, RenderContext) -> NodeLayout
     ): NodeLayout {
         val measuredRows = rows.map { row ->
-            row.map { node -> measureGlobal(node, style) }
+            row.map { node -> measureGlobal(node, context) }
         }
 
         val colCount = measuredRows.maxOfOrNull { it.size } ?: 0
@@ -123,13 +123,13 @@ internal class MatrixMeasurer : NodeMeasurer<LatexNode> {
             rowBaselines[r] = maxAscent
         }
 
-        val colSpacing = with(density) { (style.fontSize * 0.5f).toPx() }
-        val rowSpacing = with(density) { (style.fontSize * 0.2f).toPx() }
+        val colSpacing = with(density) { (context.fontSize * 0.5f).toPx() }
+        val rowSpacing = with(density) { (context.fontSize * 0.2f).toPx() }
 
         val totalWidth = colWidths.sum() + colSpacing * max(0, colCount - 1)
         val totalHeight = rowHeights.sum() + rowSpacing * max(0, rowCount - 1)
 
-        val axisHeight = with(density) { (style.fontSize * 0.25f).toPx() }
+        val axisHeight = with(density) { (context.fontSize * 0.25f).toPx() }
         val baseline = totalHeight / 2 + axisHeight
 
         return NodeLayout(totalWidth, totalHeight, baseline) { x, y ->
@@ -159,19 +159,19 @@ internal class MatrixMeasurer : NodeMeasurer<LatexNode> {
      */
     private fun measureCases(
         node: LatexNode.Cases,
-        style: RenderStyle,
+        context: RenderContext,
         measurer: TextMeasurer,
         density: Density,
-        measureGlobal: (LatexNode, RenderStyle) -> NodeLayout
+        measureGlobal: (LatexNode, RenderContext) -> NodeLayout
     ): NodeLayout {
         // 将 cases 转换为 "表达式 if 条件" 的三列结构或两列结构
         val rows = node.cases.map { (cond, expr) ->
             listOf(expr, LatexNode.Text(" if "), cond)
         }
 
-        val matrixLayout = measureMatrixLike(rows, style, measurer, density, measureGlobal)
-        val bracketWidth = with(density) { (style.fontSize * 0.5f).toPx() }
-        val strokeWidth = with(density) { (style.fontSize * 0.05f).toPx() }
+        val matrixLayout = measureMatrixLike(rows, context, measurer, density, measureGlobal)
+        val bracketWidth = with(density) { (context.fontSize * 0.5f).toPx() }
+        val strokeWidth = with(density) { (context.fontSize * 0.05f).toPx() }
 
         val width = bracketWidth + matrixLayout.width
         val height = matrixLayout.height
@@ -187,7 +187,7 @@ internal class MatrixMeasurer : NodeMeasurer<LatexNode> {
                 bracketWidth,
                 height,
                 strokeWidth,
-                style.color
+                context.color
             )
             matrixLayout.draw(this, x + bracketWidth, y)
         }
@@ -199,10 +199,10 @@ internal class MatrixMeasurer : NodeMeasurer<LatexNode> {
      */
     private fun measureMultline(
         node: LatexNode.Multline,
-        style: RenderStyle,
+        context: RenderContext,
         measurer: TextMeasurer,
         density: Density,
-        measureGlobal: (LatexNode, RenderStyle) -> NodeLayout
+        measureGlobal: (LatexNode, RenderContext) -> NodeLayout
     ): NodeLayout {
         if (node.lines.isEmpty()) {
             return NodeLayout(0f, 0f, 0f) { _, _ -> }
@@ -210,12 +210,12 @@ internal class MatrixMeasurer : NodeMeasurer<LatexNode> {
 
         // 测量每一行
         val lineLayouts = node.lines.map { line ->
-            measureGlobal(line, style)
+            measureGlobal(line, context)
         }
 
         // 计算总宽度（取最宽行）
         val maxWidth = lineLayouts.maxOfOrNull { it.width } ?: 0f
-        val rowSpacing = with(density) { (style.fontSize * 0.3f).toPx() }
+        val rowSpacing = with(density) { (context.fontSize * 0.3f).toPx() }
         
         // 计算总高度
         val totalHeight = lineLayouts.sumOf { it.height.toDouble() }.toFloat() +
@@ -245,13 +245,13 @@ internal class MatrixMeasurer : NodeMeasurer<LatexNode> {
      */
     private fun measureAligned(
         rows: List<List<LatexNode>>,
-        style: RenderStyle,
+        context: RenderContext,
         measurer: TextMeasurer,
         density: Density,
-        measureGlobal: (LatexNode, RenderStyle) -> NodeLayout
+        measureGlobal: (LatexNode, RenderContext) -> NodeLayout
     ): NodeLayout {
         val measuredRows = rows.map { row ->
-            row.map { node -> measureGlobal(node, style) }
+            row.map { node -> measureGlobal(node, context) }
         }
 
         val colCount = measuredRows.maxOfOrNull { it.size } ?: 0
@@ -285,13 +285,13 @@ internal class MatrixMeasurer : NodeMeasurer<LatexNode> {
             rowBaselines[r] = maxAscent
         }
 
-        val colSpacing = with(density) { (style.fontSize * 0.3f).toPx() }
-        val rowSpacing = with(density) { (style.fontSize * 0.2f).toPx() }
+        val colSpacing = with(density) { (context.fontSize * 0.3f).toPx() }
+        val rowSpacing = with(density) { (context.fontSize * 0.2f).toPx() }
 
         val totalWidth = colWidths.sum() + colSpacing * max(0, colCount - 1)
         val totalHeight = rowHeights.sum() + rowSpacing * max(0, rowCount - 1)
 
-        val axisHeight = with(density) { (style.fontSize * 0.25f).toPx() }
+        val axisHeight = with(density) { (context.fontSize * 0.25f).toPx() }
         val baseline = totalHeight / 2 + axisHeight
 
         return NodeLayout(totalWidth, totalHeight, baseline) { x, y ->
@@ -326,13 +326,13 @@ internal class MatrixMeasurer : NodeMeasurer<LatexNode> {
      */
     private fun measureEqnarray(
         rows: List<List<LatexNode>>,
-        style: RenderStyle,
+        context: RenderContext,
         measurer: TextMeasurer,
         density: Density,
-        measureGlobal: (LatexNode, RenderStyle) -> NodeLayout
+        measureGlobal: (LatexNode, RenderContext) -> NodeLayout
     ): NodeLayout {
         val measuredRows = rows.map { row ->
-            row.map { node -> measureGlobal(node, style) }
+            row.map { node -> measureGlobal(node, context) }
         }
 
         val colCount = measuredRows.maxOfOrNull { it.size } ?: 0
@@ -366,13 +366,13 @@ internal class MatrixMeasurer : NodeMeasurer<LatexNode> {
             rowBaselines[r] = maxAscent
         }
 
-        val colSpacing = with(density) { (style.fontSize * 0.5f).toPx() }
-        val rowSpacing = with(density) { (style.fontSize * 0.2f).toPx() }
+        val colSpacing = with(density) { (context.fontSize * 0.5f).toPx() }
+        val rowSpacing = with(density) { (context.fontSize * 0.2f).toPx() }
 
         val totalWidth = colWidths.sum() + colSpacing * max(0, colCount - 1)
         val totalHeight = rowHeights.sum() + rowSpacing * max(0, rowCount - 1)
 
-        val axisHeight = with(density) { (style.fontSize * 0.25f).toPx() }
+        val axisHeight = with(density) { (context.fontSize * 0.25f).toPx() }
         val baseline = totalHeight / 2 + axisHeight
 
         return NodeLayout(totalWidth, totalHeight, baseline) { x, y ->
@@ -405,13 +405,13 @@ internal class MatrixMeasurer : NodeMeasurer<LatexNode> {
      */
     private fun measureSubequations(
         node: LatexNode.Subequations,
-        style: RenderStyle,
+        context: RenderContext,
         measurer: TextMeasurer,
         density: Density,
-        measureGlobal: (LatexNode, RenderStyle) -> NodeLayout,
-        measureGroup: (List<LatexNode>, RenderStyle) -> NodeLayout
+        measureGlobal: (LatexNode, RenderContext) -> NodeLayout,
+        measureGroup: (List<LatexNode>, RenderContext) -> NodeLayout
     ): NodeLayout {
         // subequations 主要用于编号，在渲染层面直接渲染内容即可
-        return measureGroup(node.content, style)
+        return measureGroup(node.content, context)
     }
 }

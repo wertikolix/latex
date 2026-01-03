@@ -8,7 +8,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.hrm.latex.parser.model.LatexNode
 import com.hrm.latex.parser.model.LatexNode.Space.SpaceType
-import com.hrm.latex.renderer.model.RenderStyle
+import com.hrm.latex.renderer.model.RenderContext
 
 /**
  * 分割多行内容
@@ -31,13 +31,13 @@ fun splitLines(nodes: List<LatexNode>): List<List<LatexNode>> {
 /**
  * 计算行间距
  */
-fun lineSpacingPx(style: RenderStyle, density: Density): Float =
-    with(density) { (style.fontSize * 0.25f).toPx() }
+internal fun lineSpacingPx(context: RenderContext, density: Density): Float =
+    with(density) { (context.fontSize * 0.25f).toPx() }
 
 /**
  * 计算空白宽度
  */
-fun spaceWidthPx(style: RenderStyle, type: SpaceType, density: Density): Float {
+internal fun spaceWidthPx(context: RenderContext, type: SpaceType, density: Density): Float {
     val factor = when (type) {
         SpaceType.THIN -> 0.166f
         SpaceType.MEDIUM -> 0.222f
@@ -47,26 +47,26 @@ fun spaceWidthPx(style: RenderStyle, type: SpaceType, density: Density): Float {
         SpaceType.NORMAL -> 0.25f
         SpaceType.NEGATIVE_THIN -> -0.166f
     }
-    return with(density) { (style.fontSize * factor).toPx() }
+    return with(density) { (context.fontSize * factor).toPx() }
 }
 
 /**
  * 解析尺寸字符串 (如 "1cm", "10pt", "-5mm")
  */
-fun parseDimension(dimension: String, style: RenderStyle, density: Density): Float {
+internal fun parseDimension(dimension: String, context: RenderContext, density: Density): Float {
     val dim = dimension.trim()
     if (dim.isEmpty()) return 0f
-    
+
     // 正则提取数值和单位
     // 简单解析，不支持复杂表达式
     var numEnd = 0
     while (numEnd < dim.length && (dim[numEnd].isDigit() || dim[numEnd] == '.' || dim[numEnd] == '-')) {
         numEnd++
     }
-    
+
     val value = dim.substring(0, numEnd).toFloatOrNull() ?: 0f
     val unit = dim.substring(numEnd).trim().lowercase()
-    
+
     return with(density) {
         when (unit) {
             "pt" -> value.dp.toPx() // CSS pt ~= Android dp (approx) or use standard conversion
@@ -74,8 +74,8 @@ fun parseDimension(dimension: String, style: RenderStyle, density: Density): Flo
             "mm" -> (value * 3.78f).dp.toPx() // 1mm ~= 3.78px (at 96dpi) -> map to dp
             "cm" -> (value * 37.8f).dp.toPx()
             "in" -> (value * 96f).dp.toPx()
-            "em" -> style.fontSize.toPx() * value
-            "ex" -> style.fontSize.toPx() * 0.5f * value
+            "em" -> context.fontSize.toPx() * value
+            "ex" -> context.fontSize.toPx() * 0.5f * value
             else -> value.dp.toPx() // default to dp
         }
     }
@@ -112,7 +112,7 @@ fun mapBigOp(op: String): String {
 fun parseColor(color: String): Color? {
     val trimmed = color.trim().removePrefix("#").lowercase()
     if (trimmed.isEmpty()) return null
-    
+
     return try {
         when (trimmed.length) {
             6 -> {
@@ -123,12 +123,14 @@ fun parseColor(color: String): Color? {
                 val argb = (0xFF000000 or rgb).toInt()
                 Color(argb)
             }
+
             8 -> {
                 // ARGB 格式: AARRGGBB
                 val argb = trimmed.toLongOrNull(16) ?: return null
                 if (argb > 0xFFFFFFFF) return null
                 Color(argb.toInt())
             }
+
             else -> when (trimmed) {
                 "red" -> Color.Red
                 "blue" -> Color.Blue
@@ -202,7 +204,7 @@ fun DrawScope.drawBracket(
             val tipX = if (side == Side.LEFT) x else x + width
             val baseX = if (side == Side.LEFT) x + width else x
             val controlOffset = width * 0.4f
-            
+
             // 上半部分（顶部到中间）
             path.moveTo(baseX, y)
             path.quadraticTo(
@@ -217,7 +219,7 @@ fun DrawScope.drawBracket(
                 tipX,
                 midY
             )
-            
+
             // 下半部分（中间到底部）
             path.quadraticTo(
                 baseX + (if (side == Side.LEFT) -controlOffset else controlOffset),

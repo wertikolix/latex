@@ -4,7 +4,7 @@ import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.unit.Density
 import com.hrm.latex.parser.model.LatexNode
 import com.hrm.latex.renderer.layout.NodeLayout
-import com.hrm.latex.renderer.model.RenderStyle
+import com.hrm.latex.renderer.model.RenderContext
 import com.hrm.latex.renderer.model.shrink
 import kotlin.math.max
 
@@ -25,11 +25,11 @@ internal class StackMeasurer {
      */
     fun measure(
         node: LatexNode.Stack,
-        style: RenderStyle,
+        context: RenderContext,
         measurer: TextMeasurer,
         density: Density,
-        measureGlobal: (LatexNode, RenderStyle) -> NodeLayout,
-        measureGroup: (List<LatexNode>, RenderStyle) -> NodeLayout
+        measureGlobal: (LatexNode, RenderContext) -> NodeLayout,
+        measureGroup: (List<LatexNode>, RenderContext) -> NodeLayout
     ): NodeLayout {
         // 先对 Stack 结构做规范化：\overset{a}{\underset{b}{X}} 会产生 Stack 套 Stack
         // 如果不扁平化，会导致定位/贴合基于“已经堆叠后的盒子”，从而出现上下异常。
@@ -58,10 +58,10 @@ internal class StackMeasurer {
         }
 
         // 测量基础内容（保持原样式）- 包装成List确保作为整体渲染
-        val baseLayout = measureGroup(listOf(baseNode), style)
+        val baseLayout = measureGroup(listOf(baseNode), context)
 
         // 上下内容使用较小字体（0.7倍）
-        val scriptStyle = style.shrink(0.7f)
+        val scriptStyle = context.shrink(0.7f)
 
         // 测量上方内容（如果有）- 包装成List
         val aboveLayout = aboveNode?.let { measureGroup(listOf(it), scriptStyle) }

@@ -11,7 +11,7 @@ import com.hrm.latex.renderer.layout.measurer.MatrixMeasurer
 import com.hrm.latex.renderer.layout.measurer.SpecialEffectMeasurer
 import com.hrm.latex.renderer.layout.measurer.StackMeasurer
 import com.hrm.latex.renderer.layout.measurer.TextContentMeasurer
-import com.hrm.latex.renderer.model.RenderStyle
+import com.hrm.latex.renderer.model.RenderContext
 import com.hrm.latex.renderer.model.applyMathStyle
 import com.hrm.latex.renderer.model.applyStyle
 import com.hrm.latex.renderer.model.withColor
@@ -24,7 +24,7 @@ import com.hrm.latex.renderer.utils.splitLines
  * Refactored to use component-based architecture
  */
 internal fun measureNode(
-    node: LatexNode, style: RenderStyle, measurer: TextMeasurer, density: Density
+    node: LatexNode, context: RenderContext, measurer: TextMeasurer, density: Density
 ): NodeLayout {
     // 实例化组件 (In a real app, these should be cached or singletons if possible, but they are stateless mostly)
     val textMeasurerComp = TextContentMeasurer()
@@ -37,10 +37,10 @@ internal fun measureNode(
     val specialEffectMeasurer = SpecialEffectMeasurer()
 
     // 递归函数引用
-    val measureGlobal = { n: LatexNode, s: RenderStyle ->
+    val measureGlobal = { n: LatexNode, s: RenderContext ->
         measureNode(n, s, measurer, density)
     }
-    val measureGroupRef = { nodes: List<LatexNode>, s: RenderStyle ->
+    val measureGroupRef = { nodes: List<LatexNode>, s: RenderContext ->
         measureGroup(nodes, s, measurer, density)
     }
 
@@ -48,20 +48,27 @@ internal fun measureNode(
         is LatexNode.Text, is LatexNode.TextMode, is LatexNode.Symbol,
         is LatexNode.Operator, is LatexNode.Command, is LatexNode.Space,
         is LatexNode.HSpace ->
-            textMeasurerComp.measure(node, style, measurer, density, measureGlobal, measureGroupRef)
+            textMeasurerComp.measure(
+                node,
+                context,
+                measurer,
+                density,
+                measureGlobal,
+                measureGroupRef
+            )
 
         is LatexNode.Fraction, is LatexNode.Root, is LatexNode.Superscript,
         is LatexNode.Subscript, is LatexNode.BigOperator, is LatexNode.Binomial ->
-            mathMeasurer.measure(node, style, measurer, density, measureGlobal, measureGroupRef)
+            mathMeasurer.measure(node, context, measurer, density, measureGlobal, measureGroupRef)
 
         is LatexNode.Matrix, is LatexNode.Array, is LatexNode.Cases, is LatexNode.Aligned,
         is LatexNode.Split, is LatexNode.Multline, is LatexNode.Eqnarray, is LatexNode.Subequations ->
-            matrixMeasurer.measure(node, style, measurer, density, measureGlobal, measureGroupRef)
+            matrixMeasurer.measure(node, context, measurer, density, measureGlobal, measureGroupRef)
 
         is LatexNode.Delimited, is LatexNode.ManualSizedDelimiter ->
             delimiterMeasurer.measure(
                 node,
-                style,
+                context,
                 measurer,
                 density,
                 measureGlobal,
@@ -69,16 +76,30 @@ internal fun measureNode(
             )
 
         is LatexNode.Accent ->
-            accentMeasurer.measure(node, style, measurer, density, measureGlobal, measureGroupRef)
+            accentMeasurer.measure(node, context, measurer, density, measureGlobal, measureGroupRef)
 
         is LatexNode.ExtensibleArrow ->
-            extensibleArrowMeasurer.measure(node, style, measurer, density, measureGlobal, measureGroupRef)
+            extensibleArrowMeasurer.measure(
+                node,
+                context,
+                measurer,
+                density,
+                measureGlobal,
+                measureGroupRef
+            )
 
         is LatexNode.Stack ->
-            stackMeasurer.measure(node, style, measurer, density, measureGlobal, measureGroupRef)
+            stackMeasurer.measure(node, context, measurer, density, measureGlobal, measureGroupRef)
 
         is LatexNode.Boxed, is LatexNode.Phantom ->
-            specialEffectMeasurer.measure(node, style, measurer, density, measureGlobal, measureGroupRef)
+            specialEffectMeasurer.measure(
+                node,
+                context,
+                measurer,
+                density,
+                measureGlobal,
+                measureGroupRef
+            )
 
         is LatexNode.NewCommand -> NodeLayout(
             width = 0f,
@@ -87,42 +108,42 @@ internal fun measureNode(
         ) { _, _ -> /* NewCommand 不渲染 */ }
 
         is LatexNode.NewLine -> NodeLayout(
-            0f, lineSpacingPx(style, density), 0f
+            0f, lineSpacingPx(context, density), 0f
         ) { _, _ -> }
 
-        is LatexNode.Group -> measureGroup(node.children, style, measurer, density)
-        is LatexNode.Document -> measureGroup(node.children, style, measurer, density)
+        is LatexNode.Group -> measureGroup(node.children, context, measurer, density)
+        is LatexNode.Document -> measureGroup(node.children, context, measurer, density)
 
         is LatexNode.Style -> measureGroup(
-            node.content, style.applyStyle(node.styleType), measurer, density
+            node.content, context.applyStyle(node.styleType), measurer, density
         )
 
         is LatexNode.Color -> measureGroup(
-            node.content, style.withColor(node.color), measurer, density
+            node.content, context.withColor(node.color), measurer, density
         )
 
         is LatexNode.MathStyle -> measureGroup(
-            node.content, style.applyMathStyle(node.mathStyleType), measurer, density
+            node.content, context.applyMathStyle(node.mathStyleType), measurer, density
         )
 
-        is LatexNode.Environment -> measureGroup(node.content, style, measurer, density)
+        is LatexNode.Environment -> measureGroup(node.content, context, measurer, density)
     }
 }
 
 /**
  * 测量节点组（处理行内排列和多行）
  */
-fun measureGroup(
-    nodes: List<LatexNode>, style: RenderStyle, measurer: TextMeasurer, density: Density
+internal fun measureGroup(
+    nodes: List<LatexNode>, context: RenderContext, measurer: TextMeasurer, density: Density
 ): NodeLayout {
     // 简单处理多行逻辑：按 NewLine 分割，测量各行，垂直堆叠
     val lines = splitLines(nodes)
     if (lines.size > 1) {
-        return measureVerticalLines(lines, style, measurer, density)
+        return measureVerticalLines(lines, context, measurer, density)
     }
 
     // 单行 (InlineRow)
-    val measuredNodes = nodes.map { measureNode(it, style, measurer, density) }
+    val measuredNodes = nodes.map { measureNode(it, context, measurer, density) }
 
     var totalWidth = 0f
     var maxAscent = 0f // 基线以上高度
@@ -150,11 +171,11 @@ fun measureGroup(
 }
 
 private fun measureVerticalLines(
-    lines: List<List<LatexNode>>, style: RenderStyle, measurer: TextMeasurer, density: Density
+    lines: List<List<LatexNode>>, context: RenderContext, measurer: TextMeasurer, density: Density
 ): NodeLayout {
-    val measuredLines = lines.map { measureGroup(it, style, measurer, density) }
+    val measuredLines = lines.map { measureGroup(it, context, measurer, density) }
     val maxWidth = measuredLines.maxOfOrNull { it.width } ?: 0f
-    val spacing = lineSpacingPx(style, density)
+    val spacing = lineSpacingPx(context, density)
 
     var totalHeight = 0f
     val positions = measuredLines.map {

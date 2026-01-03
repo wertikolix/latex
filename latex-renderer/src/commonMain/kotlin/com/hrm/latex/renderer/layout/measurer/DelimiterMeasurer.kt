@@ -6,7 +6,7 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.unit.Density
 import com.hrm.latex.parser.model.LatexNode
 import com.hrm.latex.renderer.layout.NodeLayout
-import com.hrm.latex.renderer.model.RenderStyle
+import com.hrm.latex.renderer.model.RenderContext
 import com.hrm.latex.renderer.model.grow
 import com.hrm.latex.renderer.model.textStyle
 import com.hrm.latex.renderer.utils.Side
@@ -23,15 +23,15 @@ internal class DelimiterMeasurer : NodeMeasurer<LatexNode> {
 
     override fun measure(
         node: LatexNode,
-        style: RenderStyle,
+        context: RenderContext,
         measurer: TextMeasurer,
         density: Density,
-        measureGlobal: (LatexNode, RenderStyle) -> NodeLayout,
-        measureGroup: (List<LatexNode>, RenderStyle) -> NodeLayout
+        measureGlobal: (LatexNode, RenderContext) -> NodeLayout,
+        measureGroup: (List<LatexNode>, RenderContext) -> NodeLayout
     ): NodeLayout {
         return when (node) {
-            is LatexNode.Delimited -> measureDelimited(node, style, measurer, density, measureGroup)
-            is LatexNode.ManualSizedDelimiter -> measureManualSizedDelimiter(node, style, measurer, density)
+            is LatexNode.Delimited -> measureDelimited(node, context, measurer, density, measureGroup)
+            is LatexNode.ManualSizedDelimiter -> measureManualSizedDelimiter(node, context, measurer, density)
             else -> throw IllegalArgumentException("Unsupported node type: ${node::class.simpleName}")
         }
     }
@@ -47,12 +47,12 @@ internal class DelimiterMeasurer : NodeMeasurer<LatexNode> {
      */
     private fun measureDelimited(
         node: LatexNode.Delimited,
-        style: RenderStyle,
+        context: RenderContext,
         measurer: TextMeasurer,
         density: Density,
-        measureGroup: (List<LatexNode>, RenderStyle) -> NodeLayout
+        measureGroup: (List<LatexNode>, RenderContext) -> NodeLayout
     ): NodeLayout {
-        val contentLayout = measureGroup(node.content, style)
+        val contentLayout = measureGroup(node.content, context)
 
         val leftStr = node.left
         val rightStr = node.right
@@ -71,7 +71,7 @@ internal class DelimiterMeasurer : NodeMeasurer<LatexNode> {
 
         // 测量左侧文本（如果不是绘制类型且不是忽略符 .）
         val leftLayout = if (leftType == null && leftStr != ".") {
-            val textStyle = style.textStyle()
+            val textStyle = context.textStyle()
             val result = measurer.measure(AnnotatedString(leftStr), textStyle)
             NodeLayout(result.size.width.toFloat(), result.size.height.toFloat(), result.firstBaseline) { x, y ->
                 drawText(result, topLeft = androidx.compose.ui.geometry.Offset(x, y))
@@ -80,15 +80,15 @@ internal class DelimiterMeasurer : NodeMeasurer<LatexNode> {
 
         // 测量右侧文本
         val rightLayout = if (rightType == null && rightStr != ".") {
-             val textStyle = style.textStyle()
+             val textStyle = context.textStyle()
             val result = measurer.measure(AnnotatedString(rightStr), textStyle)
             NodeLayout(result.size.width.toFloat(), result.size.height.toFloat(), result.firstBaseline) { x, y ->
                 drawText(result, topLeft = androidx.compose.ui.geometry.Offset(x, y))
             }
         } else null
 
-        val bracketWidth = with(density) { (style.fontSize * 0.4f).toPx() }
-        val strokeWidth = with(density) { (style.fontSize * 0.05f).toPx() }
+        val bracketWidth = with(density) { (context.fontSize * 0.4f).toPx() }
+        val strokeWidth = with(density) { (context.fontSize * 0.05f).toPx() }
 
         val leftW = leftLayout?.width ?: if (leftStr != ".") bracketWidth else 0f
         val rightW = rightLayout?.width ?: if (rightStr != ".") bracketWidth else 0f
@@ -105,7 +105,7 @@ internal class DelimiterMeasurer : NodeMeasurer<LatexNode> {
                 leftLayout.draw(this, curX, y + baseline - leftLayout.baseline)
                 curX += leftLayout.width
             } else if (leftType != null) {
-                drawBracket(leftType, Side.LEFT, curX, y, leftW, height, strokeWidth, style.color)
+                drawBracket(leftType, Side.LEFT, curX, y, leftW, height, strokeWidth, context.color)
                 curX += leftW
             }
 
@@ -117,7 +117,7 @@ internal class DelimiterMeasurer : NodeMeasurer<LatexNode> {
             if (rightLayout != null) {
                 rightLayout.draw(this, curX, y + baseline - rightLayout.baseline)
             } else if (rightType != null) {
-                drawBracket(rightType, Side.RIGHT, curX, y, rightW, height, strokeWidth, style.color)
+                drawBracket(rightType, Side.RIGHT, curX, y, rightW, height, strokeWidth, context.color)
             }
         }
     }
@@ -129,7 +129,7 @@ internal class DelimiterMeasurer : NodeMeasurer<LatexNode> {
      */
     private fun measureManualSizedDelimiter(
         node: LatexNode.ManualSizedDelimiter,
-        style: RenderStyle,
+        context: RenderContext,
         measurer: TextMeasurer,
         density: Density
     ): NodeLayout {
@@ -145,22 +145,22 @@ internal class DelimiterMeasurer : NodeMeasurer<LatexNode> {
             else -> null
         }
 
-        val baseHeight = with(density) { (style.fontSize * 1.2f).toPx() }
+        val baseHeight = with(density) { (context.fontSize * 1.2f).toPx() }
         val height = baseHeight * scaleFactor
-        val bracketWidth = with(density) { (style.fontSize * 0.4f).toPx() }
-        val strokeWidth = with(density) { (style.fontSize * 0.05f).toPx() }
+        val bracketWidth = with(density) { (context.fontSize * 0.4f).toPx() }
+        val strokeWidth = with(density) { (context.fontSize * 0.05f).toPx() }
 
-        val axisHeight = with(density) { (style.fontSize * 0.25f).toPx() }
+        val axisHeight = with(density) { (context.fontSize * 0.25f).toPx() }
         val baseline = height / 2 + axisHeight
 
         return if (bracketType != null) {
             val side = if (delimiter in listOf("(", "[", "{")) Side.LEFT else Side.RIGHT
             NodeLayout(bracketWidth, height, baseline) { x, y ->
-                drawBracket(bracketType, side, x, y, bracketWidth, height, strokeWidth, style.color)
+                drawBracket(bracketType, side, x, y, bracketWidth, height, strokeWidth, context.color)
             }
         } else {
             // 如果不是标准括号，按放大后的文本绘制
-            val delimiterStyle = style.grow(scaleFactor)
+            val delimiterStyle = context.grow(scaleFactor)
             val textStyle = delimiterStyle.textStyle()
             val result = measurer.measure(AnnotatedString(delimiter), textStyle)
             NodeLayout(result.size.width.toFloat(), result.size.height.toFloat(), result.firstBaseline) { x, y ->

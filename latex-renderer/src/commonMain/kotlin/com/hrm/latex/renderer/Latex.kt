@@ -18,7 +18,9 @@ import com.hrm.latex.base.log.HLog
 import com.hrm.latex.parser.IncrementalLatexParser
 import com.hrm.latex.parser.model.LatexNode
 import com.hrm.latex.renderer.layout.measureGroup
-import com.hrm.latex.renderer.model.RenderStyle
+import com.hrm.latex.renderer.model.LatexConfig
+import com.hrm.latex.renderer.model.RenderContext
+import com.hrm.latex.renderer.model.toContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -36,42 +38,32 @@ private const val TAG = "Latex"
  *
  * @param latex LaTeX 字符串（支持增量输入，会自动解析可解析部分）
  * @param modifier 修饰符
- * @param style 渲染样式（包含颜色、背景色、深浅色模式配置、字体大小等）
+ * @param config 渲染样式（包含颜色、背景色、深浅色模式配置、字体大小等）
  * @param isDarkTheme 是否为深色模式（默认跟随系统）
  */
 @Composable
 fun Latex(
     latex: String,
     modifier: Modifier = Modifier,
-    style: RenderStyle = RenderStyle(),
+    config: LatexConfig = LatexConfig(),
     isDarkTheme: Boolean = isSystemInDarkTheme()
 ) {
-    // 确定最终文本颜色
-    val resolvedTextColor = if (isDarkTheme) {
-        if (style.darkColor != Color.Unspecified) style.darkColor else Color.White
-    } else {
-        if (style.color != Color.Unspecified) style.color else Color.Black
-    }
-
     // 确定最终背景颜色
     val resolvedBackgroundColor = if (isDarkTheme) {
-        style.darkBackgroundColor
+        config.darkBackgroundColor
     } else {
-        style.backgroundColor
+        config.backgroundColor
     }
 
-    // 构建最终样式
-    val resolvedStyle = style.copy(
-        color = resolvedTextColor,
-        backgroundColor = resolvedBackgroundColor
-    )
+    // 构建初始渲染上下文
+    val context = config.toContext(isDarkTheme)
 
     // 复用解析器实例以支持真正的增量解析
     val parser = remember { IncrementalLatexParser() }
-    
+
     // 使用 State 来保存解析结果
     var document by remember { mutableStateOf(LatexNode.Document(emptyList())) }
-    
+
     // 记录上次解析的内容，避免重复解析
     var lastParsedLatex by remember { mutableStateOf("") }
 
@@ -89,7 +81,7 @@ fun Latex(
             try {
                 // 优化：计算增量部分
                 val currentInput = parser.getCurrentInput()
-                
+
                 if (latex.startsWith(currentInput) && latex.length > currentInput.length) {
                     // 增量追加：只解析新增部分
                     val delta = latex.substring(currentInput.length)
@@ -99,7 +91,7 @@ fun Latex(
                     parser.clear()
                     parser.append(latex)
                 }
-                
+
                 parser.getCurrentDocument()
             } catch (e: Exception) {
                 HLog.e(TAG, "增量解析失败", e)
@@ -107,7 +99,7 @@ fun Latex(
                 LatexNode.Document(emptyList())
             }
         }
-        
+
         // 回到主线程更新 UI
         document = result
     }
@@ -115,7 +107,8 @@ fun Latex(
     LatexDocument(
         modifier = modifier,
         children = document.children,
-        style = resolvedStyle
+        context = context,
+        backgroundColor = resolvedBackgroundColor
     )
 }
 
@@ -124,19 +117,21 @@ fun Latex(
  *
  * @param modifier 修饰符
  * @param children 文档根节点
- * @param style 渲染样式
+ * @param context 渲染上下文
+ * @param backgroundColor 背景颜色
  */
 @Composable
-fun LatexDocument(
+private fun LatexDocument(
     modifier: Modifier = Modifier,
     children: List<LatexNode>,
-    style: RenderStyle = RenderStyle()
+    context: RenderContext,
+    backgroundColor: Color = Color.Transparent
 ) {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
 
-    val layout = remember(children, style, density) {
-        measureGroup(children, style, measurer, density)
+    val layout = remember(children, context, density) {
+        measureGroup(children, context, measurer, density)
     }
 
     val widthDp = with(density) { layout.width.toDp() }
@@ -145,8 +140,8 @@ fun LatexDocument(
     Box(modifier = modifier) {
         Canvas(modifier = Modifier.size(widthDp, heightDp)) {
             // 绘制背景
-            if (style.backgroundColor != Color.Unspecified) {
-                drawRect(color = style.backgroundColor)
+            if (backgroundColor != Color.Unspecified && backgroundColor != Color.Transparent) {
+                drawRect(color = backgroundColor)
             }
             // 绘制内容
             layout.draw(this, 0f, 0f)
