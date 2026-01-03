@@ -244,6 +244,26 @@ sealed class LatexNode {
     data class Cases(val cases: List<Pair<LatexNode, LatexNode>>) : LatexNode()
     
     /**
+     * Split 环境（用于单个方程内的多行分割）
+     */
+    data class Split(val rows: List<List<LatexNode>>) : LatexNode()
+    
+    /**
+     * Multline 环境（多行单个方程）
+     */
+    data class Multline(val lines: List<LatexNode>) : LatexNode()
+    
+    /**
+     * Eqnarray 环境（旧式方程数组）
+     */
+    data class Eqnarray(val rows: List<List<LatexNode>>) : LatexNode()
+    
+    /**
+     * Subequations 环境（子方程编号）
+     */
+    data class Subequations(val content: List<LatexNode>) : LatexNode()
+    
+    /**
      * 二项式系数 \binom{n}{k}
      */
     data class Binomial(

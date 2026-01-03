@@ -29,6 +29,10 @@ class EnvironmentParser(private val context: LatexParserContext) {
             "smallmatrix" -> parseMatrix("matrix", isSmall = true)
             "array" -> parseArray()
             "align", "aligned", "gather", "gathered" -> parseAligned()
+            "split" -> parseSplit()
+            "multline" -> parseMultline()
+            "eqnarray" -> parseEqnarray()
+            "subequations" -> parseSubequations()
             "cases" -> parseCases()
             "equation", "displaymath" -> {
                 val content = parseEnvironmentContent(envName)
@@ -204,6 +208,173 @@ class EnvironmentParser(private val context: LatexParserContext) {
         }
 
         return LatexNode.Aligned(rows)
+    }
+
+    /**
+     * 解析 split 环境
+     * split 用于在单个方程内分割多行,通常在 equation 内使用
+     * 语法: x &= a + b \\
+     *       &= c
+     */
+    private fun parseSplit(): LatexNode.Split {
+        val rows = mutableListOf<List<LatexNode>>()
+        var currentRow = mutableListOf<LatexNode>()
+        var currentCell = mutableListOf<LatexNode>()
+
+        while (!tokenStream.isEOF()) {
+            when (val token = tokenStream.peek()) {
+                is LatexToken.EndEnvironment -> {
+                    if (token.name == "split") {
+                        if (currentCell.isNotEmpty()) {
+                            currentRow.add(LatexNode.Group(currentCell))
+                        }
+                        if (currentRow.isNotEmpty()) {
+                            rows.add(currentRow)
+                        }
+                        tokenStream.advance()
+                        break
+                    } else {
+                        tokenStream.advance()
+                    }
+                }
+
+                is LatexToken.Ampersand -> {
+                    currentRow.add(LatexNode.Group(currentCell))
+                    currentCell = mutableListOf()
+                    tokenStream.advance()
+                }
+
+                is LatexToken.NewLine -> {
+                    if (currentCell.isNotEmpty()) {
+                        currentRow.add(LatexNode.Group(currentCell))
+                    }
+                    if (currentRow.isNotEmpty()) {
+                        rows.add(currentRow)
+                    }
+                    currentRow = mutableListOf()
+                    currentCell = mutableListOf()
+                    tokenStream.advance()
+                }
+
+                else -> {
+                    val node = context.parseExpression()
+                    if (node != null) {
+                        currentCell.add(node)
+                    }
+                }
+            }
+        }
+
+        return LatexNode.Split(rows)
+    }
+
+    /**
+     * 解析 multline 环境
+     * 用于需要多行显示的单个方程,第一行左对齐,最后一行右对齐,中间行居中
+     */
+    private fun parseMultline(): LatexNode.Multline {
+        val lines = mutableListOf<LatexNode>()
+        var currentLine = mutableListOf<LatexNode>()
+
+        while (!tokenStream.isEOF()) {
+            when (val token = tokenStream.peek()) {
+                is LatexToken.EndEnvironment -> {
+                    if (token.name == "multline") {
+                        if (currentLine.isNotEmpty()) {
+                            lines.add(LatexNode.Group(currentLine))
+                        }
+                        tokenStream.advance()
+                        break
+                    } else {
+                        tokenStream.advance()
+                    }
+                }
+
+                is LatexToken.NewLine -> {
+                    if (currentLine.isNotEmpty()) {
+                        lines.add(LatexNode.Group(currentLine))
+                    }
+                    currentLine = mutableListOf()
+                    tokenStream.advance()
+                }
+
+                else -> {
+                    val node = context.parseExpression()
+                    if (node != null) {
+                        currentLine.add(node)
+                    }
+                }
+            }
+        }
+
+        return LatexNode.Multline(lines)
+    }
+
+    /**
+     * 解析 eqnarray 环境
+     * 用于对齐多个方程,类似 align 但是是旧式语法
+     * 通常有三列:左边、关系符、右边
+     */
+    private fun parseEqnarray(): LatexNode.Eqnarray {
+        val rows = mutableListOf<List<LatexNode>>()
+        var currentRow = mutableListOf<LatexNode>()
+        var currentCell = mutableListOf<LatexNode>()
+
+        while (!tokenStream.isEOF()) {
+            when (val token = tokenStream.peek()) {
+                is LatexToken.EndEnvironment -> {
+                    if (token.name == "eqnarray") {
+                        if (currentCell.isNotEmpty()) {
+                            currentRow.add(LatexNode.Group(currentCell))
+                        }
+                        if (currentRow.isNotEmpty()) {
+                            rows.add(currentRow)
+                        }
+                        tokenStream.advance()
+                        break
+                    } else {
+                        tokenStream.advance()
+                    }
+                }
+
+                is LatexToken.Ampersand -> {
+                    currentRow.add(LatexNode.Group(currentCell))
+                    currentCell = mutableListOf()
+                    tokenStream.advance()
+                }
+
+                is LatexToken.NewLine -> {
+                    if (currentCell.isNotEmpty()) {
+                        currentRow.add(LatexNode.Group(currentCell))
+                    }
+                    if (currentRow.isNotEmpty()) {
+                        rows.add(currentRow)
+                    }
+                    currentRow = mutableListOf()
+                    currentCell = mutableListOf()
+                    tokenStream.advance()
+                }
+
+                else -> {
+                    val node = context.parseExpression()
+                    if (node != null) {
+                        currentCell.add(node)
+                    }
+                }
+            }
+        }
+
+        return LatexNode.Eqnarray(rows)
+    }
+
+    /**
+     * 解析 subequations 环境
+     * 用于对一组相关方程进行编号(如 1a, 1b, 1c)
+     * 包含其他环境
+     */
+    private fun parseSubequations(): LatexNode.Subequations {
+        val content = parseEnvironmentContent("subequations")
+        return LatexNode.Subequations(content)
     }
 
     /**

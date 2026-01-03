@@ -32,6 +32,10 @@ interface LatexVisitor<T> {
     fun visitBigOperator(node: LatexNode.BigOperator): T
     fun visitAligned(node: LatexNode.Aligned): T
     fun visitCases(node: LatexNode.Cases): T
+    fun visitSplit(node: LatexNode.Split): T
+    fun visitMultline(node: LatexNode.Multline): T
+    fun visitEqnarray(node: LatexNode.Eqnarray): T
+    fun visitSubequations(node: LatexNode.Subequations): T
     fun visitBinomial(node: LatexNode.Binomial): T
     fun visitTextMode(node: LatexNode.TextMode): T
 }
@@ -162,6 +166,30 @@ abstract class BaseLatexVisitor<T> : LatexVisitor<T> {
         return defaultVisit(node)
     }
     
+    override fun visitSplit(node: LatexNode.Split): T {
+        node.rows.forEach { row ->
+            row.forEach { cell -> visit(cell) }
+        }
+        return defaultVisit(node)
+    }
+    
+    override fun visitMultline(node: LatexNode.Multline): T {
+        node.lines.forEach { line -> visit(line) }
+        return defaultVisit(node)
+    }
+    
+    override fun visitEqnarray(node: LatexNode.Eqnarray): T {
+        node.rows.forEach { row ->
+            row.forEach { cell -> visit(cell) }
+        }
+        return defaultVisit(node)
+    }
+    
+    override fun visitSubequations(node: LatexNode.Subequations): T {
+        node.content.forEach { visit(it) }
+        return defaultVisit(node)
+    }
+    
     override fun visitBinomial(node: LatexNode.Binomial): T {
         visit(node.top)
         visit(node.bottom)
@@ -199,6 +227,10 @@ abstract class BaseLatexVisitor<T> : LatexVisitor<T> {
         is LatexNode.BigOperator -> visitBigOperator(node)
         is LatexNode.Aligned -> visitAligned(node)
         is LatexNode.Cases -> visitCases(node)
+        is LatexNode.Split -> visitSplit(node)
+        is LatexNode.Multline -> visitMultline(node)
+        is LatexNode.Eqnarray -> visitEqnarray(node)
+        is LatexNode.Subequations -> visitSubequations(node)
         is LatexNode.Binomial -> visitBinomial(node)
         is LatexNode.TextMode -> visitTextMode(node)
     }

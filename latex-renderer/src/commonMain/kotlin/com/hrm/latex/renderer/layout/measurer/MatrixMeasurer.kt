@@ -32,7 +32,11 @@ internal class MatrixMeasurer : NodeMeasurer<LatexNode> {
             is LatexNode.Matrix -> measureMatrix(node, style, measurer, density, measureGlobal)
             is LatexNode.Array -> measureMatrixLike(node.rows, style, measurer, density, measureGlobal)
             is LatexNode.Cases -> measureCases(node, style, measurer, density, measureGlobal)
-            is LatexNode.Aligned -> measureMatrixLike(node.rows, style, measurer, density, measureGlobal)
+            is LatexNode.Aligned -> measureAligned(node.rows, style, measurer, density, measureGlobal)
+            is LatexNode.Split -> measureAligned(node.rows, style, measurer, density, measureGlobal)
+            is LatexNode.Eqnarray -> measureEqnarray(node.rows, style, measurer, density, measureGlobal)
+            is LatexNode.Multline -> measureMultline(node, style, measurer, density, measureGlobal)
+            is LatexNode.Subequations -> measureSubequations(node, style, measurer, density, measureGlobal, measureGroup)
             else -> throw IllegalArgumentException("Unsupported node type: ${node::class.simpleName}")
         }
     }
@@ -187,5 +191,227 @@ internal class MatrixMeasurer : NodeMeasurer<LatexNode> {
             )
             matrixLayout.draw(this, x + bracketWidth, y)
         }
+    }
+
+    /**
+     * 测量 multline 环境
+     * 第一行左对齐，最后一行右对齐，中间行居中
+     */
+    private fun measureMultline(
+        node: LatexNode.Multline,
+        style: RenderStyle,
+        measurer: TextMeasurer,
+        density: Density,
+        measureGlobal: (LatexNode, RenderStyle) -> NodeLayout
+    ): NodeLayout {
+        if (node.lines.isEmpty()) {
+            return NodeLayout(0f, 0f, 0f) { _, _ -> }
+        }
+
+        // 测量每一行
+        val lineLayouts = node.lines.map { line ->
+            measureGlobal(line, style)
+        }
+
+        // 计算总宽度（取最宽行）
+        val maxWidth = lineLayouts.maxOfOrNull { it.width } ?: 0f
+        val rowSpacing = with(density) { (style.fontSize * 0.3f).toPx() }
+        
+        // 计算总高度
+        val totalHeight = lineLayouts.sumOf { it.height.toDouble() }.toFloat() +
+                rowSpacing * (lineLayouts.size - 1)
+        
+        // 基线为第一行的基线
+        val baseline = lineLayouts.first().baseline
+
+        return NodeLayout(maxWidth, totalHeight, baseline) { x, y ->
+            var currentY = y
+            lineLayouts.forEachIndexed { index, layout ->
+                // 第一行左对齐，最后一行右对齐，中间行居中
+                val offsetX = when {
+                    index == 0 -> 0f  // 第一行左对齐
+                    index == lineLayouts.lastIndex -> maxWidth - layout.width  // 最后一行右对齐
+                    else -> (maxWidth - layout.width) / 2  // 中间行居中
+                }
+                layout.draw(this, x + offsetX, currentY)
+                currentY += layout.height + rowSpacing
+            }
+        }
+    }
+
+    /**
+     * 测量 aligned/split 环境
+     * 支持 & 对齐符号，偶数列右对齐，奇数列左对齐
+     */
+    private fun measureAligned(
+        rows: List<List<LatexNode>>,
+        style: RenderStyle,
+        measurer: TextMeasurer,
+        density: Density,
+        measureGlobal: (LatexNode, RenderStyle) -> NodeLayout
+    ): NodeLayout {
+        val measuredRows = rows.map { row ->
+            row.map { node -> measureGlobal(node, style) }
+        }
+
+        val colCount = measuredRows.maxOfOrNull { it.size } ?: 0
+        val rowCount = measuredRows.size
+
+        val colWidths = FloatArray(colCount)
+        val rowHeights = FloatArray(rowCount)
+        val rowBaselines = FloatArray(rowCount)
+
+        // 计算列宽
+        for (c in 0 until colCount) {
+            var maxW = 0f
+            for (r in 0 until rowCount) {
+                if (c < measuredRows[r].size) {
+                    maxW = max(maxW, measuredRows[r][c].width)
+                }
+            }
+            colWidths[c] = maxW
+        }
+
+        // 计算行高和基线
+        for (r in 0 until rowCount) {
+            var maxAscent = 0f
+            var maxDescent = 0f
+            for (c in 0 until measuredRows[r].size) {
+                val cell = measuredRows[r][c]
+                maxAscent = max(maxAscent, cell.baseline)
+                maxDescent = max(maxDescent, cell.height - cell.baseline)
+            }
+            rowHeights[r] = maxAscent + maxDescent
+            rowBaselines[r] = maxAscent
+        }
+
+        val colSpacing = with(density) { (style.fontSize * 0.3f).toPx() }
+        val rowSpacing = with(density) { (style.fontSize * 0.2f).toPx() }
+
+        val totalWidth = colWidths.sum() + colSpacing * max(0, colCount - 1)
+        val totalHeight = rowHeights.sum() + rowSpacing * max(0, rowCount - 1)
+
+        val axisHeight = with(density) { (style.fontSize * 0.25f).toPx() }
+        val baseline = totalHeight / 2 + axisHeight
+
+        return NodeLayout(totalWidth, totalHeight, baseline) { x, y ->
+            var currentY = y
+            for (r in 0 until rowCount) {
+                var currentX = x
+                val rowBaseY = currentY + rowBaselines[r]
+
+                for (c in 0 until measuredRows[r].size) {
+                    val cell = measuredRows[r][c]
+                    // 偶数列（0,2,4...）右对齐，奇数列（1,3,5...）左对齐
+                    val cellX = if (c % 2 == 0) {
+                        // 右对齐
+                        currentX + colWidths[c] - cell.width
+                    } else {
+                        // 左对齐
+                        currentX
+                    }
+                    val cellY = rowBaseY - cell.baseline
+
+                    cell.draw(this, cellX, cellY)
+                    currentX += colWidths[c] + colSpacing
+                }
+                currentY += rowHeights[r] + rowSpacing
+            }
+        }
+    }
+
+    /**
+     * 测量 eqnarray 环境
+     * 三列结构：右对齐 - 居中 - 左对齐
+     */
+    private fun measureEqnarray(
+        rows: List<List<LatexNode>>,
+        style: RenderStyle,
+        measurer: TextMeasurer,
+        density: Density,
+        measureGlobal: (LatexNode, RenderStyle) -> NodeLayout
+    ): NodeLayout {
+        val measuredRows = rows.map { row ->
+            row.map { node -> measureGlobal(node, style) }
+        }
+
+        val colCount = measuredRows.maxOfOrNull { it.size } ?: 0
+        val rowCount = measuredRows.size
+
+        val colWidths = FloatArray(colCount)
+        val rowHeights = FloatArray(rowCount)
+        val rowBaselines = FloatArray(rowCount)
+
+        // 计算列宽
+        for (c in 0 until colCount) {
+            var maxW = 0f
+            for (r in 0 until rowCount) {
+                if (c < measuredRows[r].size) {
+                    maxW = max(maxW, measuredRows[r][c].width)
+                }
+            }
+            colWidths[c] = maxW
+        }
+
+        // 计算行高和基线
+        for (r in 0 until rowCount) {
+            var maxAscent = 0f
+            var maxDescent = 0f
+            for (c in 0 until measuredRows[r].size) {
+                val cell = measuredRows[r][c]
+                maxAscent = max(maxAscent, cell.baseline)
+                maxDescent = max(maxDescent, cell.height - cell.baseline)
+            }
+            rowHeights[r] = maxAscent + maxDescent
+            rowBaselines[r] = maxAscent
+        }
+
+        val colSpacing = with(density) { (style.fontSize * 0.5f).toPx() }
+        val rowSpacing = with(density) { (style.fontSize * 0.2f).toPx() }
+
+        val totalWidth = colWidths.sum() + colSpacing * max(0, colCount - 1)
+        val totalHeight = rowHeights.sum() + rowSpacing * max(0, rowCount - 1)
+
+        val axisHeight = with(density) { (style.fontSize * 0.25f).toPx() }
+        val baseline = totalHeight / 2 + axisHeight
+
+        return NodeLayout(totalWidth, totalHeight, baseline) { x, y ->
+            var currentY = y
+            for (r in 0 until rowCount) {
+                var currentX = x
+                val rowBaseY = currentY + rowBaselines[r]
+
+                for (c in 0 until measuredRows[r].size) {
+                    val cell = measuredRows[r][c]
+                    // 第0列右对齐，第1列居中，第2列左对齐
+                    val cellX = when (c) {
+                        0 -> currentX + colWidths[c] - cell.width  // 右对齐
+                        1 -> currentX + (colWidths[c] - cell.width) / 2  // 居中
+                        else -> currentX  // 左对齐
+                    }
+                    val cellY = rowBaseY - cell.baseline
+
+                    cell.draw(this, cellX, cellY)
+                    currentX += colWidths[c] + colSpacing
+                }
+                currentY += rowHeights[r] + rowSpacing
+            }
+        }
+    }
+
+    /**
+     * 测量 subequations 环境
+     * 简单地渲染其内部内容
+     */
+    private fun measureSubequations(
+        node: LatexNode.Subequations,
+        style: RenderStyle,
+        measurer: TextMeasurer,
+        density: Density,
+        measureGlobal: (LatexNode, RenderStyle) -> NodeLayout,
+        measureGroup: (List<LatexNode>, RenderStyle) -> NodeLayout
+    ): NodeLayout {
+        // subequations 主要用于编号，在渲染层面直接渲染内容即可
+        return measureGroup(node.content, style)
     }
 }

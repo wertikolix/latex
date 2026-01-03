@@ -49,7 +49,8 @@ internal fun measureNode(
         is LatexNode.Subscript, is LatexNode.BigOperator, is LatexNode.Binomial ->
             mathMeasurer.measure(node, style, measurer, density, measureGlobal, measureGroupRef)
 
-        is LatexNode.Matrix, is LatexNode.Array, is LatexNode.Cases, is LatexNode.Aligned ->
+        is LatexNode.Matrix, is LatexNode.Array, is LatexNode.Cases, is LatexNode.Aligned,
+        is LatexNode.Split, is LatexNode.Multline, is LatexNode.Eqnarray, is LatexNode.Subequations ->
             matrixMeasurer.measure(node, style, measurer, density, measureGlobal, measureGroupRef)
 
         is LatexNode.Delimited, is LatexNode.ManualSizedDelimiter ->

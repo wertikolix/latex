@@ -341,6 +341,21 @@ val basicLatexPreviewGroups = listOf(
             PreviewItem("75", "负自定义空格", "a \\hspace{-0.5em} b"),
         )
     ),
+    PreviewGroup(
+        id = "environments",
+        title = "10. 环境专题",
+        description = "split、multline、eqnarray、subequations 环境",
+        items = listOf(
+            PreviewItem("76", "split 基础", "\\begin{split} x &= a + b \\\\ &= c \\end{split}"),
+            PreviewItem("77", "split 多行", "\\begin{split} a &= b + c \\\\ &= d + e \\\\ &= f \\end{split}"),
+            PreviewItem("78", "multline 基础", "\\begin{multline} a + b + c \\\\ + d + e \\end{multline}"),
+            PreviewItem("79", "multline 三行", "\\begin{multline} \\text{Left} \\\\ \\text{Center} \\\\ \\text{Right} \\end{multline}"),
+            PreviewItem("80", "eqnarray 基础", "\\begin{eqnarray} x &=& 1 \\\\ y &=& 2 \\end{eqnarray}"),
+            PreviewItem("81", "eqnarray 三列", "\\begin{eqnarray} a + b &=& c \\\\ d - e &=& f \\end{eqnarray}"),
+            PreviewItem("82", "subequations", "\\begin{subequations} a = b \\end{subequations}"),
+            PreviewItem("83", "混合环境", "\\begin{align} x &= 1 \\\\ y &= 2 \\end{align}"),
+        )
+    ),
 )
 
 @Preview
