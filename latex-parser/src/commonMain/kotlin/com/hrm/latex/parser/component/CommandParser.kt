@@ -82,6 +82,10 @@ class CommandParser(
             "xleftarrow" -> parseExtensibleArrow(LatexNode.ExtensibleArrow.Direction.LEFT)
             "xleftrightarrow" -> parseExtensibleArrow(LatexNode.ExtensibleArrow.Direction.BOTH)
 
+            // 颜色
+            "color" -> parseColor()
+            "textcolor" -> parseTextColor()
+
             // 空格
             "," -> LatexNode.Space(LatexNode.Space.SpaceType.THIN)
             ":" -> LatexNode.Space(LatexNode.Space.SpaceType.MEDIUM)
@@ -312,6 +316,49 @@ class CommandParser(
         val above = context.parseArgument() ?: LatexNode.Text("")
         
         return LatexNode.ExtensibleArrow(above, below, direction)
+    }
+
+    /**
+     * 解析 \color{颜色名}{内容} 命令
+     * 
+     * 语法: \color{red}{文本}
+     * 例如: \color{blue}{蓝色文字}
+     */
+    private fun parseColor(): LatexNode {
+        // 解析颜色名称参数
+        val colorArg = context.parseArgument() ?: return LatexNode.Text("")
+        val colorName = extractColorName(colorArg)
+        
+        // 解析内容参数
+        val contentArg = context.parseArgument() ?: return LatexNode.Text("")
+        val content = when (contentArg) {
+            is LatexNode.Group -> contentArg.children
+            else -> listOf(contentArg)
+        }
+        
+        return LatexNode.Color(content, colorName)
+    }
+
+    /**
+     * 解析 \textcolor{颜色名}{内容} 命令
+     * 
+     * 语法: \textcolor{red}{文本}
+     * 例如: \textcolor{green}{绿色文字}
+     */
+    private fun parseTextColor(): LatexNode {
+        // \textcolor 和 \color 语法相同，都是两个参数
+        return parseColor()
+    }
+
+    /**
+     * 从节点中提取颜色名称字符串
+     */
+    private fun extractColorName(node: LatexNode): String {
+        return when (node) {
+            is LatexNode.Text -> node.content
+            is LatexNode.Group -> extractText(node.children)
+            else -> "black"
+        }
     }
 
     private fun parseSymbolOrGenericCommand(cmdName: String): LatexNode {

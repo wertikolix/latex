@@ -112,20 +112,51 @@ fun mapBigOp(op: String): String {
 fun parseColor(color: String): Color? {
     val trimmed = color.trim().removePrefix("#").lowercase()
     if (trimmed.isEmpty()) return null
-    return when (trimmed.length) {
-        6 -> runCatching { trimmed.toLong(16) }.getOrNull()
-            ?.let { Color((0xFF000000L or it).toULong()) }
-
-        8 -> runCatching { trimmed.toLong(16) }.getOrNull()?.let { Color(it.toULong()) }
-        else -> when (trimmed) {
-            "red" -> Color.Red
-            "blue" -> Color.Blue
-            "green" -> Color.Green
-            "black" -> Color.Black
-            "white" -> Color.White
-            "gray", "grey" -> Color.Gray
-            else -> null
+    
+    return try {
+        when (trimmed.length) {
+            6 -> {
+                // RGB 格式: RRGGBB
+                val rgb = trimmed.toLongOrNull(16) ?: return null
+                if (rgb > 0xFFFFFF) return null
+                // 将 RGB 转换为 ARGB (添加 alpha = FF)
+                val argb = (0xFF000000 or rgb).toInt()
+                Color(argb)
+            }
+            8 -> {
+                // ARGB 格式: AARRGGBB
+                val argb = trimmed.toLongOrNull(16) ?: return null
+                if (argb > 0xFFFFFFFF) return null
+                Color(argb.toInt())
+            }
+            else -> when (trimmed) {
+                "red" -> Color.Red
+                "blue" -> Color.Blue
+                "green" -> Color.Green
+                "black" -> Color.Black
+                "white" -> Color.White
+                "gray", "grey" -> Color.Gray
+                "yellow" -> Color.Yellow
+                "cyan" -> Color.Cyan
+                "magenta" -> Color.Magenta
+                "orange" -> Color(0xFFFFA500.toInt())
+                "purple" -> Color(0xFF800080.toInt())
+                "brown" -> Color(0xFFA52A2A.toInt())
+                "pink" -> Color(0xFFFFC0CB.toInt())
+                "lime" -> Color(0xFF00FF00.toInt())
+                "navy" -> Color(0xFF000080.toInt())
+                "teal" -> Color(0xFF008080.toInt())
+                "violet" -> Color(0xFFEE82EE.toInt())
+                else -> {
+                    println("⚠️ Unknown color: '$color' (trimmed: '$trimmed')")
+                    null
+                }
+            }
         }
+    } catch (e: Exception) {
+        println("❌ Error parsing color '$color': ${e.message}")
+        e.printStackTrace()
+        null
     }
 }
 

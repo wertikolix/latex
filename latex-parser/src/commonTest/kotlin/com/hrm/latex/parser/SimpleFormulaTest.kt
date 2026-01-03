@@ -328,4 +328,29 @@ class SimpleFormulaTest {
         assertEquals(LatexNode.ExtensibleArrow.Direction.RIGHT, arrow.direction)
         assertTrue(arrow.below != null, "Below text should not be null")
     }
+
+    @Test
+    fun testColor() {
+        val doc = parser.parse("\\color{red}{文本}")
+        val color = doc.children[0] as LatexNode.Color
+        assertEquals("red", color.color)
+        assertTrue(color.content.isNotEmpty())
+    }
+
+    @Test
+    fun testTextColor() {
+        val doc = parser.parse("\\textcolor{blue}{蓝色}")
+        val color = doc.children[0] as LatexNode.Color
+        assertEquals("blue", color.color)
+        assertTrue(color.content.isNotEmpty())
+    }
+
+    @Test
+    fun testColorInFormula() {
+        val doc = parser.parse("x + \\color{red}{y} = z")
+        assertTrue(doc.children.size >= 3)
+        // 检查是否包含颜色节点
+        val hasColorNode = doc.children.any { it is LatexNode.Color }
+        assertTrue(hasColorNode, "Should contain a Color node")
+    }
 }

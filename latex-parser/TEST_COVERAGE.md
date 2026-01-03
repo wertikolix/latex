@@ -3,7 +3,7 @@
 ## 📊 测试统计
 
 - **测试文件数量**: 8 个
-- **测试用例总数**: 231 个
+- **测试用例总数**: 234 个
 - **覆盖的功能模块**: 100%
 
 ## 📁 测试文件结构
@@ -57,7 +57,7 @@
 
 ---
 
-#### 2. SimpleFormulaTest.kt (35 个测试) ⭐⭐ 中等 (+5个)
+#### 2. SimpleFormulaTest.kt (38 个测试) ⭐⭐ 中等
 
 简单公式结构测试，验证常用数学公式元素。
 
@@ -98,7 +98,7 @@
 - ✅ `testFloorBrackets` - 下取整括号
 - ✅ `testCeilBrackets` - 上取整括号
 
-**装饰符号测试 (7个)**
+**装饰符号测试 (11个)**
 - ✅ `testHat` - 帽子
 - ✅ `testTilde` - 波浪线
 - ✅ `testOverline` - 上划线
@@ -106,6 +106,15 @@
 - ✅ `testVec` - 向量箭头
 - ✅ `testDot` - 点
 - ✅ `testDdot` - 双点
+- ✅ `testCancel` - 取消线
+- ✅ `testXrightarrow` - 可扩展右箭头
+- ✅ `testXleftarrow` - 可扩展左箭头
+- ✅ `testXrightarrowWithBelowText` - 带下方文字的可扩展箭头
+
+**颜色测试 (3个)** ⭐新增
+- ✅ `testColor` - `\color` 命令
+- ✅ `testTextColor` - `\textcolor` 命令
+- ✅ `testColorInFormula` - 公式中的颜色应用
 
 **适用场景**: 初等数学、代数、几何公式、组合数学
 

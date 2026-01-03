@@ -315,6 +315,20 @@ val basicLatexPreviewGroups = listOf(
         )
     ),
     PreviewGroup(
+        id = "colors",
+        title = "8.5 颜色专题",
+        description = "文本颜色、公式着色",
+        items = listOf(
+            PreviewItem("74", "基础颜色", "\\color{red}{红色} + \\color{blue}{蓝色}"),
+            PreviewItem("75", "textcolor 命令", "\\textcolor{green}{绿色文字}"),
+            PreviewItem("76", "公式中着色", "x + \\color{red}{y^2} = \\color{blue}{z}"),
+            PreviewItem("77", "分数着色", "\\frac{\\color{red}{a}}{\\color{blue}{b}}"),
+            PreviewItem("78", "多种颜色", "\\color{red}{R} \\color{orange}{O} \\color{yellow}{Y} \\color{green}{G} \\color{blue}{B}"),
+            PreviewItem("79", "强调重点", "E = mc^2 \\quad \\color{red}{(爱因斯坦质能方程)}"),
+            PreviewItem("80", "十六进制颜色", "\\color{#FF5733}{橙红色} \\color{#33FF57}{青绿色}"),
+        )
+    ),
+    PreviewGroup(
         id = "spaces",
         title = "9. 间距专题",
         description = "负空格、自定义空格、水平间距",
