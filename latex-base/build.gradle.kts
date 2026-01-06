@@ -3,6 +3,7 @@ import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.androidLibrary)
+    alias(libs.plugins.mavenPublish)
 }
 
 kotlin {
@@ -50,6 +51,47 @@ kotlin {
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
+        }
+    }
+}
+
+mavenPublishing {
+    publishToMavenCentral(true)
+
+    signAllPublications()
+
+    coordinates("io.github.huarangmeng", "latex-base", rootProject.property("VERSION").toString())
+
+    pom {
+        name.set("Kotlin Multiplatform LaTeX Rendering Engine")
+        description.set("""
+            Cross-platform LaTeX math rendering solution with:
+            - Full LaTeX syntax support (math mode)
+            - Custom command definitions
+            - Chemical formula rendering
+            - Compose Multiplatform UI integration
+            - Multi-module architecture (base/parser/renderer)
+        """.trimIndent())
+        inceptionYear.set("2026")
+        url.set("https://github.com/huarangmeng/latex")
+        licenses {
+            license {
+                name.set("The Apache License, Version 2.0")
+                url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
+                distribution.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
+            }
+        }
+        developers {
+            developer {
+                id.set("huaranmeng")
+                name.set("Kotlin Multiplatform Specialist")
+                url.set("https://github.com/huarangmeng/")
+            }
+        }
+        scm {
+            url.set("https://github.com/huarangmeng/latex")
+            connection.set("scm:git:git://github.com/huarangmeng/latex.git")
+            developerConnection.set("scm:git:ssh://git@github.com/huarangmeng/latex.git")
         }
     }
 }

@@ -44,7 +44,6 @@ android {
 }
 
 dependencies {
-    implementation(projects.latexSdk)
     implementation(projects.latexBase)
     implementation(projects.composeApp)
     implementation(libs.androidx.activity.compose)
