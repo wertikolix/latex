@@ -50,9 +50,9 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
-            api(projects.latexBase)
-            api(projects.latexParser)
-            api(projects.latexRenderer)
+            implementation(projects.latexBase)
+            implementation(projects.latexParser)
+            implementation(projects.latexRenderer)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
