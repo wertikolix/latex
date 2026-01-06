@@ -162,6 +162,31 @@ fun parseColor(color: String): Color? {
     }
 }
 
+/**
+ * 判断符号是否应该垂直居中
+ * 
+ * 箭头、等号、加减号等二元运算符应该居中显示
+ */
+fun isCenteredSymbol(symbol: String): Boolean {
+    return symbol in setOf(
+        // 箭头
+        "rightarrow", "leftarrow", "leftrightarrow",
+        "Rightarrow", "Leftarrow", "Leftrightarrow",
+        "longrightarrow", "longleftarrow", "longleftrightarrow",
+        "uparrow", "downarrow", "updownarrow",
+        "Uparrow", "Downarrow", "Updownarrow",
+        "mapsto", "to",
+        // 等号和关系符号
+        "equals", "neq", "approx", "equiv", "sim",
+        "leq", "geq", "ll", "gg",
+        "subset", "supset", "subseteq", "supseteq",
+        // 二元运算符
+        "plus", "minus", "times", "div", "cdot",
+        "pm", "mp", "ast", "star", "circ",
+        "oplus", "ominus", "otimes", "oslash"
+    )
+}
+
 // 括号绘制相关
 enum class Side { LEFT, RIGHT }
 

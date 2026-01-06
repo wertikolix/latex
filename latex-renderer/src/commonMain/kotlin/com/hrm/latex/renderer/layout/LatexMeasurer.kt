@@ -19,23 +19,25 @@ import com.hrm.latex.renderer.utils.lineSpacingPx
 import com.hrm.latex.renderer.utils.splitLines
 
 /**
+ * 测量器注册表，避免重复创建实例
+ */
+private object MeasurerRegistry {
+    val text = TextContentMeasurer()
+    val math = MathMeasurer()
+    val matrix = MatrixMeasurer()
+    val accent = AccentMeasurer()
+    val delimiter = DelimiterMeasurer()
+    val extensibleArrow = ExtensibleArrowMeasurer()
+    val stack = StackMeasurer()
+    val specialEffect = SpecialEffectMeasurer()
+}
+
+/**
  * 测量节点尺寸与布局
- *
- * Refactored to use component-based architecture
  */
 internal fun measureNode(
     node: LatexNode, context: RenderContext, measurer: TextMeasurer, density: Density
 ): NodeLayout {
-    // 实例化组件 (In a real app, these should be cached or singletons if possible, but they are stateless mostly)
-    val textMeasurerComp = TextContentMeasurer()
-    val mathMeasurer = MathMeasurer()
-    val matrixMeasurer = MatrixMeasurer()
-    val accentMeasurer = AccentMeasurer()
-    val delimiterMeasurer = DelimiterMeasurer()
-    val extensibleArrowMeasurer = ExtensibleArrowMeasurer()
-    val stackMeasurer = StackMeasurer()
-    val specialEffectMeasurer = SpecialEffectMeasurer()
-
     // 递归函数引用
     val measureGlobal = { n: LatexNode, s: RenderContext ->
         measureNode(n, s, measurer, density)
@@ -48,58 +50,30 @@ internal fun measureNode(
         is LatexNode.Text, is LatexNode.TextMode, is LatexNode.Symbol,
         is LatexNode.Operator, is LatexNode.Command, is LatexNode.Space,
         is LatexNode.HSpace ->
-            textMeasurerComp.measure(
-                node,
-                context,
-                measurer,
-                density,
-                measureGlobal,
-                measureGroupRef
-            )
+            MeasurerRegistry.text.measure(node, context, measurer, density, measureGlobal, measureGroupRef)
 
         is LatexNode.Fraction, is LatexNode.Root, is LatexNode.Superscript,
         is LatexNode.Subscript, is LatexNode.BigOperator, is LatexNode.Binomial ->
-            mathMeasurer.measure(node, context, measurer, density, measureGlobal, measureGroupRef)
+            MeasurerRegistry.math.measure(node, context, measurer, density, measureGlobal, measureGroupRef)
 
         is LatexNode.Matrix, is LatexNode.Array, is LatexNode.Cases, is LatexNode.Aligned,
         is LatexNode.Split, is LatexNode.Multline, is LatexNode.Eqnarray, is LatexNode.Subequations ->
-            matrixMeasurer.measure(node, context, measurer, density, measureGlobal, measureGroupRef)
+            MeasurerRegistry.matrix.measure(node, context, measurer, density, measureGlobal, measureGroupRef)
 
         is LatexNode.Delimited, is LatexNode.ManualSizedDelimiter ->
-            delimiterMeasurer.measure(
-                node,
-                context,
-                measurer,
-                density,
-                measureGlobal,
-                measureGroupRef
-            )
+            MeasurerRegistry.delimiter.measure(node, context, measurer, density, measureGlobal, measureGroupRef)
 
         is LatexNode.Accent ->
-            accentMeasurer.measure(node, context, measurer, density, measureGlobal, measureGroupRef)
+            MeasurerRegistry.accent.measure(node, context, measurer, density, measureGlobal, measureGroupRef)
 
         is LatexNode.ExtensibleArrow ->
-            extensibleArrowMeasurer.measure(
-                node,
-                context,
-                measurer,
-                density,
-                measureGlobal,
-                measureGroupRef
-            )
+            MeasurerRegistry.extensibleArrow.measure(node, context, measurer, density, measureGlobal, measureGroupRef)
 
         is LatexNode.Stack ->
-            stackMeasurer.measure(node, context, measurer, density, measureGlobal, measureGroupRef)
+            MeasurerRegistry.stack.measure(node, context, measurer, density, measureGlobal, measureGroupRef)
 
         is LatexNode.Boxed, is LatexNode.Phantom ->
-            specialEffectMeasurer.measure(
-                node,
-                context,
-                measurer,
-                density,
-                measureGlobal,
-                measureGroupRef
-            )
+            MeasurerRegistry.specialEffect.measure(node, context, measurer, density, measureGlobal, measureGroupRef)
 
         is LatexNode.NewCommand -> NodeLayout(
             width = 0f,

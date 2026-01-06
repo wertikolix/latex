@@ -16,9 +16,9 @@ import com.hrm.latex.renderer.model.RenderContext
 /**
  * 测量特殊效果节点（boxed, phantom）
  */
-internal class SpecialEffectMeasurer {
+internal class SpecialEffectMeasurer : NodeMeasurer<LatexNode> {
 
-    fun measure(
+    override fun measure(
         node: LatexNode,
         context: RenderContext,
         measurer: TextMeasurer,

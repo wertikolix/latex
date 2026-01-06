@@ -6,6 +6,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -241,9 +242,7 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
      *
      * 模式选择逻辑：
      * - 积分符号 (\int) 始终使用侧边模式。
-     * - 求和/乘积符号 (\sum, \prod)：
-     *   - displaystyle (fontSize >= 16): 上下标在上下方
-     *   - textstyle/scriptstyle/scriptscriptstyle (fontSize < 16): 上下标在右侧
+     * - 求和/乘积符号 (\sum, \prod)：仅在 DISPLAY 模式下使用上下模式。
      */
     private fun measureBigOperator(
         node: LatexNode.BigOperator,
@@ -255,20 +254,31 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
         val symbol = mapBigOp(node.operator)
         val isIntegral = node.operator.contains("int")
 
+        // 识别文本类型的算子（如 det, lim, max 等），这些算子应该使用正体（Roman）
+        val isNamedOperator = symbol == node.operator && symbol.all { it.isLetter() }
+        
         // 判断是否使用侧边模式（上下标在右侧）：
-        // 1. 积分符号始终使用侧边模式
-        // 2. 求和/乘积：只有在 displaystyle（大字体）下才使用上下模式
-        val useSideMode = isIntegral || context.fontSize < 16.sp
+        // 1. 强制设置了 NOLIMITS
+        // 2. 设置了 AUTO：
+        //    - 积分符号 (\int) 默认使用侧边模式
+        //    - 其他大型运算符 (\sum, \prod 等) 默认使用上下模式 (Limits)
+        // 注意：强制设置了 LIMITS 则始终不使用侧边模式
+        val useSideMode = when (node.limitsMode) {
+            LatexNode.BigOperator.LimitsMode.LIMITS -> false
+            LatexNode.BigOperator.LimitsMode.NOLIMITS -> true
+            LatexNode.BigOperator.LimitsMode.AUTO -> isIntegral
+        }
         
         // 根据模式调整运算符缩放
         val scaleFactor = when {
-            useSideMode -> 1.0f           // 侧边模式：不放大，保持与周围文字协调
-            else -> 1.5f                   // displaystyle 上下模式：放大以突出
+            useSideMode -> 1.0f           // 侧边模式：不放大
+            else -> 1.5f                  // DISPLAY 模式：放大
         }
         
-        val opStyle = context.grow(scaleFactor)
-        // 缩小上下限字体：从 0.8f 降至 0.7f (标准的 SCRIPT_SCALE_FACTOR)
-        val limitStyle = context.shrink(0.7f)
+        val opStyle = context.grow(scaleFactor).let { 
+            if (isNamedOperator) it.copy(fontStyle = FontStyle.Normal) else it
+        }
+        val limitStyle = context.shrink(LatexConstants.OPERATOR_LIMIT_SCALE_FACTOR)
 
         // 测量运算符符号
         val textStyle = opStyle.textStyle()
@@ -285,15 +295,10 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
         val subLayout = node.subscript?.let { measureGroup(listOf(it), limitStyle) }
 
         if (useSideMode) {
-            // 侧边模式：上下标在右侧（类似普通上下标）
-            // 恢复适中的水平间距
+            // 侧边模式：上下标在右侧
             val gap = with(density) { (context.fontSize * 0.08f).toPx() }
-            
-            // 针对积分符号 (∫) 的视觉优化：
-            // 积分号是倾斜的，下标通常需要稍微向左移动（负偏移）才显得对齐
             val subOffset = if (isIntegral) with(density) { (context.fontSize * 0.12f).toPx() } else 0f
             
-            // 增大垂直偏移比例，防止上下限重叠（特别是字号缩小到 0.7f 后）
             val sUp = opLayout.height * 0.45f
             val sDown = opLayout.height * 0.35f
             val superRelBase = -sUp
@@ -317,33 +322,23 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
                 opLayout.draw(this, x, y + baseline - opLayout.baseline)
                 val scriptX = x + opLayout.width + gap
                 superLayout?.draw(this, scriptX, y + baseline + superRelBase - superLayout.baseline)
-                // 应用积分下标的负偏移
                 subLayout?.draw(this, scriptX - subOffset, y + baseline + subRelBase - subLayout.baseline)
             }
         } else {
-            // 显示模式：上下标在正上方和正下方（仅用于 displaystyle）
-            // 进一步优化间距：由于大型运算符（如 \sum）的测量结果通常包含巨大的垂直 padding，
-            // 我们需要显著减小间距，甚至使用负间距来抵消 padding。
-            val spacing = with(density) { (context.fontSize * 0.01f).toPx() }
-            
-            // 视觉校正量：大型运算符在视觉上往往比测量高度要窄（垂直方向）
-            // 我们使用 0.8 的系数来收缩运算符占用的垂直空间，使其上下限更紧凑
+            // 显示模式：上下标在正上方和正下方
+            val spacing = with(density) { (context.fontSize * LatexConstants.OPERATOR_LIMIT_GAP_RATIO).toPx() }
             val visualOpHeight = opLayout.height * 0.85f
             val opPadding = (opLayout.height - visualOpHeight) / 2
             
             val maxWidth = max(opLayout.width, max(superLayout?.width ?: 0f, subLayout?.width ?: 0f))
             
-            // 计算上标位置：减去运算符顶部的 padding，并加上微小间距
             val opTop = (superLayout?.height ?: 0f) + spacing - opPadding
-            // 计算下标位置：运算符底部 padding 被抵消
             val subTop = opTop + visualOpHeight + spacing
             
             val totalHeight = subTop + (subLayout?.height ?: 0f)
-            // 修正基线位置
             val baseline = opTop + opLayout.baseline - opPadding
 
             return NodeLayout(maxWidth, totalHeight, baseline) { x, y ->
-                // 绘制运算符时需要还原 padding 偏移
                 opLayout.draw(this, x + (maxWidth - opLayout.width) / 2, y + opTop - opPadding)
                 superLayout?.draw(this, x + (maxWidth - superLayout.width) / 2, y)
                 subLayout?.draw(this, x + (maxWidth - subLayout.width) / 2, y + subTop)

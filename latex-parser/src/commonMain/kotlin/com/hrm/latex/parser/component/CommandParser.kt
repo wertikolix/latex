@@ -45,7 +45,8 @@ class CommandParser(
             // 上下标（大型运算符）
             "sum", "prod", "int", "oint", "iint", "iiint",
             "bigcup", "bigcap", "bigvee", "bigwedge",
-            "lim", "max", "min", "sup", "inf", "limsup", "liminf" -> parseBigOperator(cmdName)
+            "lim", "max", "min", "sup", "inf", "limsup", "liminf",
+            "det", "gcd", "deg", "dim", "ker", "arg", "hom" -> parseBigOperator(cmdName)
 
             // 括号（自动伸缩）
             "left" -> parseDelimited()
@@ -119,6 +120,12 @@ class CommandParser(
             "boxed" -> parseBoxed()
             "phantom" -> parsePhantom()
 
+            // 数学算子 (正体渲染)
+            "sin", "cos", "tan", "cot", "sec", "csc",
+            "arcsin", "arccos", "arctan",
+            "sinh", "cosh", "tanh", "coth",
+            "ln", "log", "exp", "lg", "sgn", "lcm" -> LatexNode.Operator(cmdName)
+
             // 自定义命令
             "newcommand" -> parseNewCommand()
 
@@ -189,22 +196,33 @@ class CommandParser(
     private fun parseBigOperator(operator: String): LatexNode {
         var subscript: LatexNode? = null
         var superscript: LatexNode? = null
+        var limitsMode = LatexNode.BigOperator.LimitsMode.AUTO
 
-        // 循环解析上下标，直到不再出现 _ 或 ^，以防止顺序问题并处理重复
+        // 循环解析上下标和 \limits/\nolimits
         while (!tokenStream.isEOF()) {
             val token = tokenStream.peek()
-            if (token is LatexToken.Subscript && subscript == null) {
-                tokenStream.advance()
-                subscript = parseScriptContent()
-            } else if (token is LatexToken.Superscript && superscript == null) {
-                tokenStream.advance()
-                superscript = parseScriptContent()
-            } else {
-                break
+            when {
+                token is LatexToken.Command && token.name == "limits" -> {
+                    tokenStream.advance()
+                    limitsMode = LatexNode.BigOperator.LimitsMode.LIMITS
+                }
+                token is LatexToken.Command && token.name == "nolimits" -> {
+                    tokenStream.advance()
+                    limitsMode = LatexNode.BigOperator.LimitsMode.NOLIMITS
+                }
+                token is LatexToken.Subscript && subscript == null -> {
+                    tokenStream.advance()
+                    subscript = parseScriptContent()
+                }
+                token is LatexToken.Superscript && superscript == null -> {
+                    tokenStream.advance()
+                    superscript = parseScriptContent()
+                }
+                else -> break
             }
         }
 
-        return LatexNode.BigOperator(operator, subscript, superscript)
+        return LatexNode.BigOperator(operator, subscript, superscript, limitsMode)
     }
 
     private fun parseScriptContent(): LatexNode {

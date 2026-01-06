@@ -18,9 +18,9 @@ import kotlin.math.max
  *
  * 支持 \xrightarrow{文字}、\xleftarrow{文字} 等命令
  */
-internal class ExtensibleArrowMeasurer {
+internal class ExtensibleArrowMeasurer : NodeMeasurer<LatexNode.ExtensibleArrow> {
 
-    fun measure(
+    override fun measure(
         node: LatexNode.ExtensibleArrow,
         context: RenderContext,
         measurer: TextMeasurer,

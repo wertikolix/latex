@@ -250,8 +250,15 @@ sealed class LatexNode {
     data class BigOperator(
         val operator: String,
         val subscript: LatexNode? = null,
-        val superscript: LatexNode? = null
-    ) : LatexNode()
+        val superscript: LatexNode? = null,
+        val limitsMode: LimitsMode = LimitsMode.AUTO
+    ) : LatexNode() {
+        enum class LimitsMode {
+            AUTO,       // 默认（根据 MathStyle 和运算符类型决定）
+            LIMITS,     // 强制上下模式 (\limits)
+            NOLIMITS    // 强制侧边模式 (\nolimits)
+        }
+    }
     
     /**
      * 对齐环境

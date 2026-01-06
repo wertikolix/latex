@@ -32,7 +32,7 @@ internal data class RenderContext(
     val fontStyle: FontStyle? = null,
     val fontFamily: FontFamily? = FontFamily.Serif,
     val fontVariant: FontVariant = FontVariant.NORMAL,
-    val mathStyle: MathStyleMode = MathStyleMode.TEXT
+    val mathStyle: MathStyleMode = MathStyleMode.DISPLAY
 ) {
     enum class MathStyleMode {
         DISPLAY,         // \displaystyle
@@ -59,7 +59,7 @@ internal fun LatexConfig.toContext(isDark: Boolean): RenderContext {
     } else {
         if (color != Color.Unspecified) color else Color.Black
     }
-    
+
     return RenderContext(
         fontSize = fontSize,
         color = resolvedColor,
@@ -78,9 +78,10 @@ internal fun RenderContext.textStyle(): TextStyle = TextStyle(
 internal fun RenderContext.shrink(factor: Float): RenderContext = copy(fontSize = fontSize * factor)
 internal fun RenderContext.grow(factor: Float): RenderContext = copy(fontSize = fontSize * factor)
 
-internal fun RenderContext.withColor(colorString: String): RenderContext = parseColor(colorString)?.let {
-    copy(color = it)
-} ?: this
+internal fun RenderContext.withColor(colorString: String): RenderContext =
+    parseColor(colorString)?.let {
+        copy(color = it)
+    } ?: this
 
 internal fun RenderContext.applyStyle(styleType: LatexNode.Style.StyleType): RenderContext =
     when (styleType) {
@@ -90,6 +91,7 @@ internal fun RenderContext.applyStyle(styleType: LatexNode.Style.StyleType): Ren
             fontStyle = FontStyle.Normal,
             fontFamily = FontFamily.Serif
         )
+
         LatexNode.Style.StyleType.SANS_SERIF -> copy(fontFamily = FontFamily.SansSerif)
         LatexNode.Style.StyleType.MONOSPACE -> copy(fontFamily = FontFamily.Monospace)
         LatexNode.Style.StyleType.BLACKBOARD_BOLD -> copy(fontVariant = RenderContext.FontVariant.BLACKBOARD_BOLD)
@@ -108,13 +110,13 @@ internal fun RenderContext.applyMathStyle(mathStyleType: LatexNode.MathStyle.Mat
         LatexNode.MathStyle.MathStyleType.SCRIPT -> RenderContext.MathStyleMode.SCRIPT
         LatexNode.MathStyle.MathStyleType.SCRIPT_SCRIPT -> RenderContext.MathStyleMode.SCRIPT_SCRIPT
     }
-    
+
     val scaleFactor = when (newMode) {
         RenderContext.MathStyleMode.DISPLAY, RenderContext.MathStyleMode.TEXT -> 1.0f
         RenderContext.MathStyleMode.SCRIPT -> 0.7f
         RenderContext.MathStyleMode.SCRIPT_SCRIPT -> 0.5f
     }
-    
+
     return copy(
         fontSize = fontSize * scaleFactor,
         mathStyle = newMode

@@ -6,24 +6,15 @@ import com.hrm.latex.parser.model.LatexNode
 import com.hrm.latex.renderer.layout.NodeLayout
 import com.hrm.latex.renderer.model.RenderContext
 import com.hrm.latex.renderer.model.shrink
+import com.hrm.latex.renderer.utils.isCenteredSymbol
 import kotlin.math.max
 
 /**
  * 堆叠渲染器，用于 \overset、\underset、\stackrel 等命令
  */
-internal class StackMeasurer {
+internal class StackMeasurer : NodeMeasurer<LatexNode.Stack> {
 
-    /**
-     * 测量并布局堆叠节点
-     *
-     * 布局结构（以 \overset 为例）：
-     * ```
-     *     上方内容 (紧贴基础内容上方)
-     *     基础内容
-     *     下方内容 (紧贴基础内容下方)
-     * ```
-     */
-    fun measure(
+    override fun measure(
         node: LatexNode.Stack,
         context: RenderContext,
         measurer: TextMeasurer,
@@ -31,7 +22,7 @@ internal class StackMeasurer {
         measureGlobal: (LatexNode, RenderContext) -> NodeLayout,
         measureGroup: (List<LatexNode>, RenderContext) -> NodeLayout
     ): NodeLayout {
-        // 先对 Stack 结构做规范化：\overset{a}{\underset{b}{X}} 会产生 Stack 套 Stack
+        // 先对 Stack 结构做规范化 ：\overset{a}{\underset{b}{X}} 会产生 Stack 套 Stack
         // 如果不扁平化，会导致定位/贴合基于“已经堆叠后的盒子”，从而出现上下异常。
         fun unwrapSingleGroup(node0: LatexNode): LatexNode {
             var n = node0
@@ -78,24 +69,7 @@ internal class StackMeasurer {
         // 不要用间距，尽量贴合
         val gap = 0f
 
-        // \\overset/\\underset 在“关系符号/箭头”上应贴近符号中线（数学轴），而不是贴盒子的顶部/底部。
-        // 注意：命令参数在 parser 里通常会包一层 Group（例如 {\\to} 会变成 Group(children=[Symbol("to")]))，
-        // 所以这里要先解包“单子节点 Group”。
-        val centeredSymbols = setOf(
-            // 箭头
-            "rightarrow", "leftarrow", "leftrightarrow",
-            "Rightarrow", "Leftarrow", "Leftrightarrow",
-            "longrightarrow", "longleftarrow", "longleftrightarrow",
-            "uparrow", "downarrow", "updownarrow",
-            "Uparrow", "Downarrow", "Updownarrow",
-            "mapsto", "to",
-            // 关系符号
-            "equals", "neq", "approx", "equiv", "sim",
-            "leq", "geq", "ll", "gg",
-            "subset", "supset", "subseteq", "supseteq"
-        )
-
-        val isCenteredBase = (baseNode as? LatexNode.Symbol)?.symbol in centeredSymbols
+        val isCenteredBase = (baseNode as? LatexNode.Symbol)?.symbol?.let { isCenteredSymbol(it) } == true
 
         // centered 符号（如箭头/等号）在 TextContentMeasurer 里会把 baseline 调到 height*0.85 来“上移居中”。
         // 这会导致：如果我们用 height*0.5 当附着点，实际上是在贴“行高盒子”，而不是贴符号的墨迹。
