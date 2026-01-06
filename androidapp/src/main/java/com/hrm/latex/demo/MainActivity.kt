@@ -9,7 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import com.hrm.latex.App
 import com.hrm.latex.base.log.ILogger
-import com.hrm.latex.sdk.LatexSDK
+import com.hrm.latex.base.LatexSDK
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
