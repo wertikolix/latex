@@ -8,6 +8,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -258,31 +259,44 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
         val isNamedOperator = symbol == node.operator && symbol.all { it.isLetter() }
 
         // 判断是否使用侧边模式（上下标在右侧）：
-        // 1. 强制设置了 NOLIMITS
-        // 2. 设置了 AUTO：
-        //    - 积分符号 (\int) 默认使用侧边模式
-        //    - 其他大型运算符 (\sum, \prod 等) 在非 DISPLAY 模式下使用侧边模式
-        // 注意：强制设置了 LIMITS 则始终不使用侧边模式
+        // 1. 强制设置了 NOLIMITS：使用侧边模式
+        // 2. 强制设置了 LIMITS：使用上下模式
+        // 3. AUTO 模式（默认）：
+        //    - 积分符号 (\int)：始终使用侧边模式
+        //    - 命名运算符 (lim, max, min 等)：始终使用上下模式（limits）
+        //    - 其他符号运算符 (\sum, \prod 等)：仅在 DISPLAY 模式下使用上下模式
         val useSideMode = when (node.limitsMode) {
             LatexNode.BigOperator.LimitsMode.LIMITS -> false
             LatexNode.BigOperator.LimitsMode.NOLIMITS -> true
             LatexNode.BigOperator.LimitsMode.AUTO -> {
-                isIntegral || context.mathStyle != RenderContext.MathStyleMode.DISPLAY
+                when {
+                    isIntegral -> true  // 积分始终侧边
+                    isNamedOperator -> false  // 命名运算符始终上下
+                    else -> context.mathStyle != RenderContext.MathStyleMode.DISPLAY  // 其他符号看模式
+                }
             }
         }
 
         // 根据模式调整运算符缩放
+        // 统一缩放因子以确保符号笔画粗细一致
         var scaleFactor = when {
             context.mathStyle == RenderContext.MathStyleMode.DISPLAY -> {
-                if (isIntegral) 1.5f else 1.6f // 增大积分在 display 模式下的基础大小
+                1.5f  // Display 模式：所有大型运算符统一使用 1.5x
             }
-
-            useSideMode -> if (isIntegral) 1.2f else 1.0f // 即使是侧边模式，积分也应该稍微大一点
+            useSideMode -> {
+                1.2f  // Side 模式（行内）：所有大型运算符统一使用 1.2x
+            }
             else -> 1.3f
         }
 
         val opStyle = context.grow(scaleFactor).let {
-            if (isNamedOperator) it.copy(fontStyle = FontStyle.Normal) else it
+            if (isNamedOperator) {
+                // 命名运算符（如 det, lim）使用正体 + 较细字重
+                it.copy(fontStyle = FontStyle.Normal, fontWeight = FontWeight.Light)
+            } else {
+                // 符号运算符（如 Σ, ∏）使用较细的字重以避免笔画过粗
+                it.copy(fontWeight = FontWeight.Light)
+            }
         }
         val limitStyle = context.shrink(LatexConstants.OPERATOR_LIMIT_SCALE_FACTOR)
 
@@ -300,7 +314,7 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
             }
         }
 
-        // 积分符号保持原本比例，高度通过垂直拉伸实现，笔画宽度由 scaleFactor (1.2x) 决定
+        // 积分符号保持原本比例，高度通过垂直拉伸实现
         val opWidth = opResult.size.width.toFloat()
         val opHeight = opResult.size.height.toFloat() * verticalScale
 
@@ -331,35 +345,37 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
             // 积分符号相对整体基线的位置（垂直居中于数学轴）
             val opRelBase = -axisHeight - opLayout.height / 2f
             val opTop = opRelBase  // 积分符号顶部相对基线
-            val opBottom = opRelBase + opHeight  // 积分符号底部相对基线
+            val opBottom = opRelBase + opLayout.height  // 积分符号底部相对基线
             
-            // 积分符号的实际绘制位置（x坐标）
-            // 对于积分符号，由于 glyph 包含大量右侧空白，我们定义一个较窄的"视觉核心区"
-            val opVisualWidth = if (isIntegral) {
-                with(density) { (context.fontSize * 0.35f).toPx() }
-            } else {
-                opLayout.width
+            // 运算符的实际绘制位置（x坐标）
+            // 对于某些符号（如积分、命名运算符），glyph 包含大量右侧空白，我们定义一个较窄的"视觉核心区"
+            val opVisualWidth = when {
+                isIntegral -> with(density) { (context.fontSize * 0.32f).toPx() }  // 积分符号视觉核心区
+                isNamedOperator -> with(density) { (context.fontSize * symbol.length * 0.45f).toPx() }  // 命名运算符按字符数估算
+                else -> opLayout.width
             }
             
-            // 积分符号绘制时的左偏移（居中于视觉核心区）
-            val opDrawX = if (isIntegral) {
+            // 运算符绘制时的左偏移（居中于视觉核心区）
+            val opDrawX = if (isIntegral || isNamedOperator) {
                 max(0f, (opVisualWidth - opLayout.width) / 2f)
             } else {
                 0f
             }
             
-            // 积分符号实际占用的左侧宽度
+            // 运算符实际占用的左侧宽度
             val opActualLeft = if (opDrawX == 0f) opLayout.width else opVisualWidth
             
-            // ============ 步骤2: 基于积分符号的实际位置，计算上下限的位置 ============
+            // ============ 步骤2: 基于运算符的实际位置，计算上下限的位置 ============
             
-            // 积分符号在布局中的实际绘制区域（考虑 opDrawX 偏移后）
-            // 积分符号的视觉右边缘位置
+            // 运算符在布局中的实际绘制区域（考虑 opDrawX 偏移后）
+            // 运算符的视觉右边缘位置
             val opVisualRight = opActualLeft
             
             // 上下限与积分符号之间的水平间距
             val limitSpacing = if (isIntegral) {
-                with(density) { (context.fontSize * 0.08f).toPx() }
+                with(density) { (context.fontSize * 0.05f).toPx() }  // 减小间距使布局更紧凑
+            } else if (isNamedOperator) {
+                with(density) { (context.fontSize * 0.03f).toPx() }  // 命名运算符（如 lim）使用更小的间距
             } else {
                 with(density) { 1.dp.toPx() }
             }
@@ -378,7 +394,7 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
                 // 积分符号倾斜角度约为 15-20 度
                 // 从顶部到底部的水平偏移约为 height * tan(angle) ≈ height * 0.3
                 // 因此下限需要向左回退以贴近积分符号底部
-                opVisualRight + limitSpacing - with(density) { (context.fontSize * 0.20f).toPx() }
+                opVisualRight + limitSpacing - with(density) { (context.fontSize * 0.18f).toPx() }
             } else {
                 opVisualRight + limitSpacing
             }
@@ -404,6 +420,14 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
                     // 文本底部 = 基线 + (height - baseline)
                     // 因此：基线 = opBottom - (height - baseline)
                     opBottom - (subLayout.height - subLayout.baseline)
+                } else {
+                    opLayout.height * 0.35f - axisHeight
+                }
+            } else if (isNamedOperator) {
+                // 命名运算符（如 lim）的下标位置：更靠近符号底部
+                if (subLayout != null) {
+                    val gap = with(density) { (context.fontSize * 0.05f).toPx() }  // 极小的垂直间距
+                    opBottom + gap
                 } else {
                     opLayout.height * 0.35f - axisHeight
                 }
@@ -434,7 +458,13 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
             }
         } else {
             // 显示模式：上下标在正上方和正下方
-            val spacing = with(density) { (context.fontSize * LatexConstants.OPERATOR_LIMIT_GAP_RATIO).toPx() }
+            // 命名运算符（如 lim）使用更小的间距
+            val spacing = if (isNamedOperator) {
+                with(density) { (context.fontSize * 0.02f).toPx() }  // 命名运算符使用极小的间距（0.02em）
+            } else {
+                with(density) { (context.fontSize * LatexConstants.OPERATOR_LIMIT_GAP_RATIO).toPx() }
+            }
+            
             val visualOpHeight = opLayout.height * 0.85f
             val opPadding = (opLayout.height - visualOpHeight) / 2
 

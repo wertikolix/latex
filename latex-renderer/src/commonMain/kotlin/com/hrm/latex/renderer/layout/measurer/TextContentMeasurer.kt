@@ -74,7 +74,7 @@ internal class TextContentMeasurer : NodeMeasurer<LatexNode> {
     ): NodeLayout {
         val text = if (node.unicode.isEmpty()) node.symbol else node.unicode
         
-        val resolvedStyle = if (context.fontStyle == null) {
+        var resolvedStyle = if (context.fontStyle == null) {
             when {
                 isLowercaseGreek(node.symbol) -> context.copy(fontStyle = FontStyle.Italic)
                 isUppercaseGreek(node.symbol) -> context.copy(fontStyle = FontStyle.Normal)
@@ -82,6 +82,11 @@ internal class TextContentMeasurer : NodeMeasurer<LatexNode> {
             }
         } else {
             context
+        }
+        
+        // 对某些符号（如 ℏ, ∇, ∂）应用极细字重，避免笔画过粗
+        if (needsLightWeight(node.symbol)) {
+            resolvedStyle = resolvedStyle.copy(fontWeight = FontWeight.ExtraLight)
         }
         
         val layout = measureAnnotatedText(text, resolvedStyle, measurer)
@@ -133,6 +138,18 @@ internal class TextContentMeasurer : NodeMeasurer<LatexNode> {
     private fun isUppercaseGreek(symbol: String): Boolean {
         return symbol in setOf(
             "Gamma", "Delta", "Theta", "Lambda", "Xi", "Pi", "Sigma", "Upsilon", "Phi", "Psi", "Omega"
+        )
+    }
+    
+    /**
+     * 判断符号是否需要使用极细字重（FontWeight.ExtraLight）
+     * 某些符号（如 ℏ, ∇, ∂）在正常字重下笔画过粗，需要使用极细字重
+     */
+    private fun needsLightWeight(symbol: String): Boolean {
+        return symbol in setOf(
+            "hbar",      // ℏ (h-bar)
+            "nabla",     // ∇ (nabla)
+            "partial"    // ∂ (partial derivative)
         )
     }
 
