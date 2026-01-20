@@ -34,7 +34,6 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.hrm.latex.base.LatexConstants
 import com.hrm.latex.parser.model.LatexNode
 import com.hrm.latex.renderer.layout.NodeLayout
@@ -68,9 +67,32 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
         return when (node) {
             is LatexNode.Fraction -> measureFraction(node, context, measurer, density, measureGroup)
             is LatexNode.Root -> measureRoot(node, context, measurer, density, measureGroup)
-            is LatexNode.Superscript -> measureScript(node, context, measurer, density, measureGlobal, isSuper = true)
-            is LatexNode.Subscript -> measureScript(node, context, measurer, density, measureGlobal, isSuper = false)
-            is LatexNode.BigOperator -> measureBigOperator(node, context, measurer, density, measureGroup)
+            is LatexNode.Superscript -> measureScript(
+                node,
+                context,
+                measurer,
+                density,
+                measureGlobal,
+                isSuper = true
+            )
+
+            is LatexNode.Subscript -> measureScript(
+                node,
+                context,
+                measurer,
+                density,
+                measureGlobal,
+                isSuper = false
+            )
+
+            is LatexNode.BigOperator -> measureBigOperator(
+                node,
+                context,
+                measurer,
+                density,
+                measureGroup
+            )
+
             is LatexNode.Binomial -> measureBinomial(node, context, measurer, density, measureGroup)
             else -> throw IllegalArgumentException("Unsupported node type: ${node::class.simpleName}")
         }
@@ -218,8 +240,10 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
         measureGlobal: (LatexNode, RenderContext) -> NodeLayout,
         isSuper: Boolean
     ): NodeLayout {
-        val baseNode = if (isSuper) (node as LatexNode.Superscript).base else (node as LatexNode.Subscript).base
-        val scriptNode = if (isSuper) (node as LatexNode.Superscript).exponent else (node as LatexNode.Subscript).index
+        val baseNode =
+            if (isSuper) (node as LatexNode.Superscript).base else (node as LatexNode.Subscript).base
+        val scriptNode =
+            if (isSuper) (node as LatexNode.Superscript).exponent else (node as LatexNode.Subscript).index
 
         // 检测同时存在上下标的情况（化学式等）
         // 例如: Ba^{2+}_{3} 会被解析为 Subscript(Superscript(Ba, 2+), 3)
@@ -257,7 +281,7 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
 
             // 上下标都从原始 base 右侧开始，水平对齐
             val scriptX = realBaseLayout.width + with(density) { 1.dp.toPx() }
-            
+
             // 上标和下标的垂直位置
             val superLayout = if (isSuper) currentScriptLayout else otherScriptLayout
             val subLayout = if (isSuper) otherScriptLayout else currentScriptLayout
@@ -372,9 +396,11 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
             context.mathStyle == RenderContext.MathStyleMode.DISPLAY -> {
                 1.5f  // Display 模式：所有大型运算符统一使用 1.5x
             }
+
             useSideMode -> {
                 1.2f  // Side 模式（行内）：所有大型运算符统一使用 1.2x
             }
+
             else -> 1.3f
         }
 
@@ -417,7 +443,10 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
                     // 仅在垂直方向拉伸
                     scale(1.0f, verticalScale, pivot = Offset(x + opWidth / 2f, y + opHeight / 2f))
                 }) {
-                    drawText(opResult, topLeft = Offset(x, y + (opHeight - opResult.size.height) / 2f))
+                    drawText(
+                        opResult,
+                        topLeft = Offset(x, y + (opHeight - opResult.size.height) / 2f)
+                    )
                 }
             } else {
                 drawText(opResult, topLeft = Offset(x, y))
@@ -430,12 +459,12 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
         if (useSideMode) {
             // ============ 步骤1: 计算积分符号的位置和尺寸 ============
             val axisHeight = LayoutUtils.getAxisHeight(density, context, measurer)
-            
+
             // 积分符号相对整体基线的位置（垂直居中于数学轴）
             val opRelBase = -axisHeight - opLayout.height / 2f
             val opTop = opRelBase  // 积分符号顶部相对基线
             val opBottom = opRelBase + opLayout.height  // 积分符号底部相对基线
-            
+
             // 运算符的实际绘制位置（x坐标）
             // 对于某些符号（如积分、命名运算符），glyph 包含大量右侧空白，我们定义一个较窄的"视觉核心区"
             val opVisualWidth = when {
@@ -443,23 +472,23 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
                 isNamedOperator -> with(density) { (context.fontSize * symbol.length * 0.45f).toPx() }  // 命名运算符按字符数估算
                 else -> opLayout.width
             }
-            
+
             // 运算符绘制时的左偏移（居中于视觉核心区）
             val opDrawX = if (isIntegral || isNamedOperator) {
                 max(0f, (opVisualWidth - opLayout.width) / 2f)
             } else {
                 0f
             }
-            
+
             // 运算符实际占用的左侧宽度
             val opActualLeft = if (opDrawX == 0f) opLayout.width else opVisualWidth
-            
+
             // ============ 步骤2: 基于运算符的实际位置，计算上下限的位置 ============
-            
+
             // 运算符在布局中的实际绘制区域（考虑 opDrawX 偏移后）
             // 运算符的视觉右边缘位置
             val opVisualRight = opActualLeft
-            
+
             // 上下限与积分符号之间的水平间距
             val limitSpacing = if (isIntegral) {
                 with(density) { (context.fontSize * 0.05f).toPx() }  // 减小间距使布局更紧凑
@@ -468,7 +497,7 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
             } else {
                 with(density) { 1.dp.toPx() }
             }
-            
+
             // 计算上下限的水平位置
             // 关键：积分符号是倾斜的（从左上到右下），因此：
             // - 上限：在顶部位置，需要相对于积分视觉右边缘偏移
@@ -478,7 +507,7 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
             } else {
                 opVisualRight + limitSpacing
             }
-            
+
             val subX = if (isIntegral) {
                 // 积分符号倾斜角度约为 15-20 度
                 // 从顶部到底部的水平偏移约为 height * tan(angle) ≈ height * 0.3
@@ -487,9 +516,9 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
             } else {
                 opVisualRight + limitSpacing
             }
-            
+
             // ============ 步骤3: 计算上下限的垂直位置（基线对齐） ============
-            
+
             val superRelBase = if (isIntegral) {
                 if (superLayout != null) {
                     // 上限文本顶部对齐积分符号顶部
@@ -502,7 +531,7 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
             } else {
                 -opLayout.height * 0.45f - axisHeight
             }
-            
+
             val subRelBase = if (isIntegral) {
                 if (subLayout != null) {
                     // 下限文本底部对齐积分符号底部
@@ -525,16 +554,17 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
             }
 
             // ============ 步骤4: 计算总体布局尺寸 ============
-            
+
             val superTop = if (superLayout != null) superRelBase - superLayout.baseline else opTop
-            val subBottom = if (subLayout != null) subRelBase + (subLayout.height - subLayout.baseline) else opBottom
+            val subBottom =
+                if (subLayout != null) subRelBase + (subLayout.height - subLayout.baseline) else opBottom
 
             val maxTop = min(opTop, superTop)
             val maxBottom = max(opBottom, subBottom)
 
             val totalHeight = maxBottom - maxTop
             val baseline = -maxTop
-            
+
             // 总宽度：积分符号实际宽度 + 上下限超出部分
             val superRightEdge = superX + (superLayout?.width ?: 0f)
             val subRightEdge = subX + (subLayout?.width ?: 0f)
@@ -542,7 +572,11 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
 
             return NodeLayout(width, totalHeight, baseline) { x, y ->
                 opLayout.draw(this, x + opDrawX, y + baseline + opRelBase)
-                superLayout?.draw(this, x + superX, y + baseline + superRelBase - superLayout.baseline)
+                superLayout?.draw(
+                    this,
+                    x + superX,
+                    y + baseline + superRelBase - superLayout.baseline
+                )
                 subLayout?.draw(this, x + subX, y + baseline + subRelBase - subLayout.baseline)
             }
         } else {
@@ -553,11 +587,12 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
             } else {
                 with(density) { (context.fontSize * LatexConstants.OPERATOR_LIMIT_GAP_RATIO).toPx() }
             }
-            
+
             val visualOpHeight = opLayout.height * 0.85f
             val opPadding = (opLayout.height - visualOpHeight) / 2
 
-            val maxWidth = max(opLayout.width, max(superLayout?.width ?: 0f, subLayout?.width ?: 0f))
+            val maxWidth =
+                max(opLayout.width, max(superLayout?.width ?: 0f, subLayout?.width ?: 0f))
 
             val opTop = (superLayout?.height ?: 0f) + spacing - opPadding
             val subTop = opTop + visualOpHeight + spacing
@@ -592,7 +627,7 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
         val gap = with(density) { (context.fontSize * 0.2f).toPx() }
         val contentWidth = max(numLayout.width, denLayout.width)
         val height = numLayout.height + denLayout.height + gap
-        
+
         // 修正：二项式系数的基准线应与数学轴对齐，而非简单的几何中心
         val axisHeight = LayoutUtils.getAxisHeight(density, context, measurer)
         val center = numLayout.height + gap / 2f
@@ -604,9 +639,27 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
 
         return NodeLayout(width, height, baseline) { x, y ->
             // 绘制左右括号
-            drawBracket(LatexNode.Matrix.MatrixType.PAREN, Side.LEFT, x, y, bracketWidth, height, strokeWidth, context.color)
-            drawBracket(LatexNode.Matrix.MatrixType.PAREN, Side.RIGHT, x + width - bracketWidth, y, bracketWidth, height, strokeWidth, context.color)
-            
+            drawBracket(
+                LatexNode.Matrix.MatrixType.PAREN,
+                Side.LEFT,
+                x,
+                y,
+                bracketWidth,
+                height,
+                strokeWidth,
+                context.color
+            )
+            drawBracket(
+                LatexNode.Matrix.MatrixType.PAREN,
+                Side.RIGHT,
+                x + width - bracketWidth,
+                y,
+                bracketWidth,
+                height,
+                strokeWidth,
+                context.color
+            )
+
             // 绘制内容
             val numX = x + bracketWidth + (contentWidth - numLayout.width) / 2
             val denX = x + bracketWidth + (contentWidth - denLayout.width) / 2
