@@ -23,18 +23,18 @@
 
 package com.hrm.latex.renderer.layout.measurer
 
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
 import com.hrm.latex.parser.model.LatexNode
 import com.hrm.latex.renderer.layout.NodeLayout
 import com.hrm.latex.renderer.model.RenderContext
-import com.hrm.latex.renderer.model.grow
 import com.hrm.latex.renderer.model.textStyle
 import com.hrm.latex.renderer.utils.LayoutUtils
-import com.hrm.latex.renderer.utils.Side
-import com.hrm.latex.renderer.utils.drawBracket
 
 /**
  * 定界符测量器
@@ -54,8 +54,21 @@ internal class DelimiterMeasurer : NodeMeasurer<LatexNode> {
         measureGroup: (List<LatexNode>, RenderContext) -> NodeLayout
     ): NodeLayout {
         return when (node) {
-            is LatexNode.Delimited -> measureDelimited(node, context, measurer, density, measureGroup)
-            is LatexNode.ManualSizedDelimiter -> measureManualSizedDelimiter(node, context, measurer, density)
+            is LatexNode.Delimited -> measureDelimited(
+                node,
+                context,
+                measurer,
+                density,
+                measureGroup
+            )
+
+            is LatexNode.ManualSizedDelimiter -> measureManualSizedDelimiter(
+                node,
+                context,
+                measurer,
+                density
+            )
+
             else -> throw IllegalArgumentException("Unsupported node type: ${node::class.simpleName}")
         }
     }
@@ -81,41 +94,16 @@ internal class DelimiterMeasurer : NodeMeasurer<LatexNode> {
         val leftStr = node.left
         val rightStr = node.right
 
-        fun getBracketType(str: String): LatexNode.Matrix.MatrixType? = when (str) {
-            "(", ")" -> LatexNode.Matrix.MatrixType.PAREN
-            "[", "]" -> LatexNode.Matrix.MatrixType.BRACKET
-            "{", "}" -> LatexNode.Matrix.MatrixType.BRACE
-            "|", "|" -> LatexNode.Matrix.MatrixType.VBAR
-            "||" -> LatexNode.Matrix.MatrixType.DOUBLE_VBAR
-            else -> null
-        }
-
-        val leftType = getBracketType(leftStr)
-        val rightType = getBracketType(rightStr)
-
-        // 测量左侧文本（如果不是绘制类型且不是忽略符 .）
-        val leftLayout = if (leftType == null && leftStr != ".") {
-            val textStyle = context.textStyle()
-            val result = measurer.measure(AnnotatedString(leftStr), textStyle)
-            NodeLayout(result.size.width.toFloat(), result.size.height.toFloat(), result.firstBaseline) { x, y ->
-                drawText(result, topLeft = androidx.compose.ui.geometry.Offset(x, y))
-            }
+        val leftLayout = if (leftStr != ".") {
+            measureDelimiterScaled(leftStr, context, measurer, contentLayout.height)
         } else null
 
-        // 测量右侧文本
-        val rightLayout = if (rightType == null && rightStr != ".") {
-             val textStyle = context.textStyle()
-            val result = measurer.measure(AnnotatedString(rightStr), textStyle)
-            NodeLayout(result.size.width.toFloat(), result.size.height.toFloat(), result.firstBaseline) { x, y ->
-                drawText(result, topLeft = androidx.compose.ui.geometry.Offset(x, y))
-            }
+        val rightLayout = if (rightStr != ".") {
+            measureDelimiterScaled(rightStr, context, measurer, contentLayout.height)
         } else null
 
-        val bracketWidth = with(density) { (context.fontSize * 0.4f).toPx() }
-        val strokeWidth = with(density) { (context.fontSize * 0.05f).toPx() }
-
-        val leftW = leftLayout?.width ?: if (leftStr != ".") bracketWidth else 0f
-        val rightW = rightLayout?.width ?: if (rightStr != ".") bracketWidth else 0f
+        val leftW = leftLayout?.width ?: 0f
+        val rightW = rightLayout?.width ?: 0f
 
         val width = leftW + contentLayout.width + rightW
         val height = contentLayout.height
@@ -124,32 +112,110 @@ internal class DelimiterMeasurer : NodeMeasurer<LatexNode> {
         return NodeLayout(width, height, baseline) { x, y ->
             var curX = x
 
-            // 绘制左侧
+            // 计算数学轴的绝对 Y 坐标
+            // 数学轴是相对于 baseline 的位置,用于居中运算符和括号
+            val axisHeight = LayoutUtils.getAxisHeight(density, context, measurer)
+            val contentAxisY = y + baseline - axisHeight
+
+            // 绘制左侧括号:括号的几何中心应该对齐到数学轴
             if (leftLayout != null) {
-                leftLayout.draw(this, curX, y + baseline - leftLayout.baseline)
+                val delimiterTopY = contentAxisY - leftLayout.height / 2f
+                leftLayout.draw(this, curX, delimiterTopY)
                 curX += leftLayout.width
-            } else if (leftType != null) {
-                drawBracket(leftType, Side.LEFT, curX, y, leftW, height, strokeWidth, context.color)
-                curX += leftW
             }
 
             // 绘制内容
             contentLayout.draw(this, curX, y)
             curX += contentLayout.width
 
-            // 绘制右侧
+            // 绘制右侧括号:与左侧相同的逻辑
             if (rightLayout != null) {
-                rightLayout.draw(this, curX, y + baseline - rightLayout.baseline)
-            } else if (rightType != null) {
-                drawBracket(rightType, Side.RIGHT, curX, y, rightW, height, strokeWidth, context.color)
+                val delimiterTopY = contentAxisY - rightLayout.height / 2f
+                rightLayout.draw(this, curX, delimiterTopY)
             }
+        }
+    }
+
+    private fun delimiterContext(
+        context: RenderContext,
+        delimiter: String,
+        scale: Float = 1.0f
+    ): RenderContext {
+        // 根据缩放比例连续调整 fontWeight (100-400)：
+        // - scale = 1.0: FontWeight(400) = Normal（正常大小）
+        // - scale = 1.5: FontWeight(300) = Light
+        // - scale = 2.0: FontWeight(200) = ExtraLight
+        // - scale >= 2.5: FontWeight(100) = Thin（最细）
+        // 使用线性插值计算中间值
+        val weight = when {
+            scale <= 1.0f -> 400  // 正常或更小，使用 Normal
+            scale >= 2.5f -> 100  // 很高的括号，使用 Thin
+            else -> {
+                // 线性插值: scale 从 1.0 到 2.5，weight 从 400 到 100
+                val t = (scale - 1.0f) / 1.5f  // 归一化到 [0, 1]
+                (400 - t * 300).toInt().coerceIn(100, 400)
+            }
+        }
+
+        val fontWeight = FontWeight(weight)
+
+        return context.copy(
+            fontStyle = FontStyle.Normal,
+            fontFamily = context.fontFamilies?.symbol ?: context.fontFamily,
+            fontWeight = fontWeight
+        )
+    }
+
+    private fun measureDelimiterScaled(
+        delimiter: String,
+        context: RenderContext,
+        measurer: TextMeasurer,
+        targetHeight: Float
+    ): NodeLayout {
+        // 先用默认 weight 测量获取基础高度
+        val baseLayout = measureDelimiterText(delimiter, delimiterContext(context, delimiter), measurer)
+        if (baseLayout.height <= 0f || targetHeight <= 0f) {
+            return baseLayout
+        }
+
+        val scale = targetHeight / baseLayout.height
+
+        // 根据实际缩放比例重新测量（应用动态 fontWeight）
+        val adjustedContext = delimiterContext(context, delimiter, scale)
+        val adjustedLayout = measureDelimiterText(delimiter, adjustedContext, measurer)
+
+        // 使用 Canvas scale 而不是字体大小缩放，避免笔画变粗
+        return NodeLayout(
+            width = adjustedLayout.width * scale,
+            height = targetHeight,
+            baseline = adjustedLayout.baseline * scale
+        ) { x, y ->
+            scale(scale, scale, pivot = androidx.compose.ui.geometry.Offset(x, y)) {
+                adjustedLayout.draw(this, x, y)
+            }
+        }
+    }
+
+    private fun measureDelimiterText(
+        delimiter: String,
+        delimiterStyle: RenderContext,
+        measurer: TextMeasurer
+    ): NodeLayout {
+        val textStyle = delimiterStyle.textStyle()
+        val result = measurer.measure(AnnotatedString(delimiter), textStyle)
+        return NodeLayout(
+            result.size.width.toFloat(),
+            result.size.height.toFloat(),
+            result.firstBaseline
+        ) { x, y ->
+            drawText(result, topLeft = androidx.compose.ui.geometry.Offset(x, y))
         }
     }
 
     /**
      * 测量手动大小的定界符 (\big, \Big 等)
      *
-     * 这些定界符作为独立的符号存在，不包裹内容。
+     * 这些定界符作为独立的符号存在,不包裹内容。
      */
     private fun measureManualSizedDelimiter(
         node: LatexNode.ManualSizedDelimiter,
@@ -160,36 +226,17 @@ internal class DelimiterMeasurer : NodeMeasurer<LatexNode> {
         val delimiter = node.delimiter
         val scaleFactor = node.size
 
-        val bracketType = when (delimiter) {
-            "(", ")" -> LatexNode.Matrix.MatrixType.PAREN
-            "[", "]" -> LatexNode.Matrix.MatrixType.BRACKET
-            "{", "}" -> LatexNode.Matrix.MatrixType.BRACE
-            "|" -> LatexNode.Matrix.MatrixType.VBAR
-            "||" -> LatexNode.Matrix.MatrixType.DOUBLE_VBAR
-            else -> null
-        }
+        // 根据 scaleFactor 动态调整 fontWeight
+        val delimiterStyle =
+            delimiterContext(context, delimiter, scaleFactor).copy(fontSize = context.fontSize * scaleFactor)
+        val result = measurer.measure(AnnotatedString(delimiter), delimiterStyle.textStyle())
 
-        val baseHeight = with(density) { (context.fontSize * 1.2f).toPx() }
-        val height = baseHeight * scaleFactor
-        val bracketWidth = with(density) { (context.fontSize * 0.4f).toPx() }
-        val strokeWidth = with(density) { (context.fontSize * 0.05f).toPx() }
-
-        val axisHeight = LayoutUtils.getAxisHeight(density, context, measurer)
-        val baseline = height / 2 + axisHeight
-
-        return if (bracketType != null) {
-            val side = if (delimiter in listOf("(", "[", "{")) Side.LEFT else Side.RIGHT
-            NodeLayout(bracketWidth, height, baseline) { x, y ->
-                drawBracket(bracketType, side, x, y, bracketWidth, height, strokeWidth, context.color)
-            }
-        } else {
-            // 如果不是标准括号，按放大后的文本绘制
-            val delimiterStyle = context.grow(scaleFactor)
-            val textStyle = delimiterStyle.textStyle()
-            val result = measurer.measure(AnnotatedString(delimiter), textStyle)
-            NodeLayout(result.size.width.toFloat(), result.size.height.toFloat(), result.firstBaseline) { x, y ->
-                drawText(result, topLeft = androidx.compose.ui.geometry.Offset(x, y))
-            }
+        return NodeLayout(
+            result.size.width.toFloat(),
+            result.size.height.toFloat(),
+            result.firstBaseline
+        ) { x, y ->
+            drawText(result, topLeft = androidx.compose.ui.geometry.Offset(x, y))
         }
     }
 }

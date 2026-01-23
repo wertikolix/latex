@@ -77,7 +77,14 @@ internal class TextContentMeasurer : NodeMeasurer<LatexNode> {
     private fun measureText(
         text: String, context: RenderContext, measurer: TextMeasurer
     ): NodeLayout {
-        val transformedText = applyFontVariant(text, context.fontVariant)
+        // 如果使用了字体系列变体（blackboardBold, calligraphic等），直接使用原始文本
+        // 字体会自动显示正确的字形，不需要Unicode映射
+        val transformedText = if (context.isVariantFontFamily) {
+            text  // 直接使用原始文本，让字体处理
+        } else {
+            // 降级方案：没有字体时才使用Unicode映射
+            applyFontVariant(text, context.fontVariant)
+        }
         
         val resolvedStyle = if (context.fontStyle == null && context.fontVariant == RenderContext.FontVariant.NORMAL) {
             when {
@@ -141,6 +148,12 @@ internal class TextContentMeasurer : NodeMeasurer<LatexNode> {
         }
     }
 
+    /**
+     * 应用字体变体的降级方案（Unicode 映射）
+     * 
+     * 注意：这是降级方案，仅在无法加载字体时使用。
+     * 正常情况下应该直接使用对应的字体系列（blackboardBold, calligraphic等）。
+     */
     private fun applyFontVariant(text: String, variant: RenderContext.FontVariant): String {
         return when (variant) {
             RenderContext.FontVariant.BLACKBOARD_BOLD -> MathFontUtils.toBlackboardBold(text)

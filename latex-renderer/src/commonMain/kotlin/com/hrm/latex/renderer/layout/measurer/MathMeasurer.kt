@@ -26,6 +26,7 @@ package com.hrm.latex.renderer.layout.measurer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextMeasurer
@@ -42,8 +43,6 @@ import com.hrm.latex.renderer.model.grow
 import com.hrm.latex.renderer.model.shrink
 import com.hrm.latex.renderer.model.textStyle
 import com.hrm.latex.renderer.utils.LayoutUtils
-import com.hrm.latex.renderer.utils.Side
-import com.hrm.latex.renderer.utils.drawBracket
 import com.hrm.latex.renderer.utils.mapBigOp
 import kotlin.math.max
 import kotlin.math.min
@@ -55,6 +54,75 @@ import kotlin.math.min
  * 这些结构通常涉及子节点的相对定位和缩放。
  */
 internal class MathMeasurer : NodeMeasurer<LatexNode> {
+
+    /**
+     * 获取定界符的渲染上下文（使用 symbol 字体）
+     */
+    private fun delimiterContext(
+        context: RenderContext,
+        scale: Float = 1.0f
+    ): RenderContext {
+        // 根据缩放比例动态调整 fontWeight (100-400)
+        val weight = when {
+            scale <= 1.0f -> 400  // 正常大小
+            scale >= 2.5f -> 100  // 很高的括号，使用最细
+            else -> {
+                val t = (scale - 1.0f) / 1.5f
+                (400 - t * 300).toInt().coerceIn(100, 400)
+            }
+        }
+
+        val fontWeight = FontWeight(weight)
+
+        return context.copy(
+            fontStyle = FontStyle.Normal,
+            fontFamily = context.fontFamilies?.symbol ?: context.fontFamily,
+            fontWeight = fontWeight
+        )
+    }
+
+    /**
+     * 测量并缩放定界符
+     */
+    private fun measureDelimiterScaled(
+        delimiter: String,
+        context: RenderContext,
+        measurer: TextMeasurer,
+        targetHeight: Float
+    ): NodeLayout {
+        // 先用默认 weight 测量获取基础高度
+        val baseContext = delimiterContext(context)
+        val baseStyle = baseContext.textStyle()
+        val baseResult = measurer.measure(AnnotatedString(delimiter), baseStyle)
+        
+        if (baseResult.size.height <= 0f || targetHeight <= 0f) {
+            return NodeLayout(
+                baseResult.size.width.toFloat(),
+                baseResult.size.height.toFloat(),
+                baseResult.firstBaseline
+            ) { x, y ->
+                drawText(baseResult, topLeft = Offset(x, y))
+            }
+        }
+
+        val scale = targetHeight / baseResult.size.height
+
+        // 根据实际缩放比例重新测量（应用动态 fontWeight）
+        val adjustedContext = delimiterContext(context, scale)
+        val adjustedStyle = adjustedContext.textStyle()
+        val adjustedResult = measurer.measure(AnnotatedString(delimiter), adjustedStyle)
+
+        // 使用 Canvas scale 而不是字体大小缩放，避免笔画变粗
+        return NodeLayout(
+            width = adjustedResult.size.width * scale,
+            height = targetHeight,
+            baseline = adjustedResult.firstBaseline * scale
+        ) { x, y ->
+            scale(scale, scale, pivot = Offset(x, y)) {
+                drawText(adjustedResult, topLeft = Offset(x, y))
+            }
+        }
+    }
 
     override fun measure(
         node: LatexNode,
@@ -406,11 +474,14 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
 
         val opStyle = context.grow(scaleFactor).let {
             if (isNamedOperator) {
-                // 命名运算符（如 det, lim）使用正体 + 较细字重
-                it.copy(fontStyle = FontStyle.Normal, fontWeight = FontWeight.Light)
+                // 命名运算符（如 det, lim）使用正体
+                it.copy(fontStyle = FontStyle.Normal)
             } else {
-                // 符号运算符（如 Σ, ∏）使用较细的字重以避免笔画过粗
-                it.copy(fontWeight = FontWeight.Light)
+                // 大型运算符（∑∫∏等）使用 cmex10 (extension) 字体
+                it.copy(
+                    fontFamily = context.fontFamilies?.extension ?: context.fontFamily,
+                    fontStyle = FontStyle.Normal
+                )
             }
         }
         val limitStyle = context.shrink(LatexConstants.OPERATOR_LIMIT_SCALE_FACTOR)
@@ -429,14 +500,37 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
             }
         }
 
+        // 根据垂直拉伸比例动态调整 fontWeight（类似括号的处理）
+        val adjustedOpStyle = if (verticalScale > 1.0f) {
+            // 计算 fontWeight：verticalScale 从 1.0 到 2.5，weight 从 400 到 100
+            val weight = when {
+                verticalScale <= 1.0f -> 400  // 正常大小
+                verticalScale >= 2.5f -> 100  // 拉伸很多，用最细
+                else -> {
+                    val t = (verticalScale - 1.0f) / 1.5f
+                    (400 - t * 300).toInt().coerceIn(100, 400)
+                }
+            }
+            opStyle.copy(fontWeight = androidx.compose.ui.text.font.FontWeight(weight))
+        } else {
+            opStyle
+        }
+        
+        // 如果 fontWeight 改变了，重新测量
+        val finalOpResult = if (adjustedOpStyle != opStyle) {
+            measurer.measure(AnnotatedString(symbol), adjustedOpStyle.textStyle())
+        } else {
+            opResult
+        }
+
         // 积分符号保持原本比例，高度通过垂直拉伸实现
-        val opWidth = opResult.size.width.toFloat()
-        val opHeight = opResult.size.height.toFloat() * verticalScale
+        val opWidth = finalOpResult.size.width.toFloat()
+        val opHeight = finalOpResult.size.height.toFloat() * verticalScale
 
         val opLayout = NodeLayout(
             opWidth,
             opHeight,
-            opResult.firstBaseline * verticalScale
+            finalOpResult.firstBaseline * verticalScale
         ) { x, y ->
             if (verticalScale != 1.0f) {
                 withTransform({
@@ -444,12 +538,12 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
                     scale(1.0f, verticalScale, pivot = Offset(x + opWidth / 2f, y + opHeight / 2f))
                 }) {
                     drawText(
-                        opResult,
-                        topLeft = Offset(x, y + (opHeight - opResult.size.height) / 2f)
+                        finalOpResult,
+                        topLeft = Offset(x, y + (opHeight - finalOpResult.size.height) / 2f)
                     )
                 }
             } else {
-                drawText(opResult, topLeft = Offset(x, y))
+                drawText(finalOpResult, topLeft = Offset(x, y))
             }
         }
 
@@ -457,18 +551,14 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
         val subLayout = node.subscript?.let { measureGroup(listOf(it), limitStyle) }
 
         if (useSideMode) {
-            // ============ 步骤1: 计算积分符号的位置和尺寸 ============
+            // ============ 步骤1: 获取数学轴高度（用于对齐） ============
             val axisHeight = LayoutUtils.getAxisHeight(density, context, measurer)
-
-            // 积分符号相对整体基线的位置（垂直居中于数学轴）
-            val opRelBase = -axisHeight - opLayout.height / 2f
-            val opTop = opRelBase  // 积分符号顶部相对基线
-            val opBottom = opRelBase + opLayout.height  // 积分符号底部相对基线
-
-            // 运算符的实际绘制位置（x坐标）
+            
+            // ============ 步骤2: 计算运算符的水平位置和视觉宽度 ============
+            
             // 对于某些符号（如积分、命名运算符），glyph 包含大量右侧空白，我们定义一个较窄的"视觉核心区"
             val opVisualWidth = when {
-                isIntegral -> with(density) { (context.fontSize * 0.32f).toPx() }  // 积分符号视觉核心区
+                isIntegral -> with(density) { (context.fontSize * 0.22f).toPx() }  // 积分符号视觉核心区（缩小以让上下标更贴近）
                 isNamedOperator -> with(density) { (context.fontSize * symbol.length * 0.45f).toPx() }  // 命名运算符按字符数估算
                 else -> opLayout.width
             }
@@ -483,15 +573,30 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
             // 运算符实际占用的左侧宽度
             val opActualLeft = if (opDrawX == 0f) opLayout.width else opVisualWidth
 
-            // ============ 步骤2: 基于运算符的实际位置，计算上下限的位置 ============
+            // ============ 步骤3: 计算积分符号应该垂直居中的目标高度 ============
+            
+            // 如果是积分符号且有高度暗示（来自括号内容），使用该高度
+            // 否则使用运算符本身的高度
+            val targetCenterHeight = if (isIntegral && context.bigOpHeightHint != null) {
+                context.bigOpHeightHint
+            } else {
+                opLayout.height
+            }
+            
+            // 积分符号应该垂直居中于目标高度（相对于数学轴）
+            // 运算符的几何中心应该位于数学轴上
+            val opCenterRelAxis = 0f  // 运算符中心对齐数学轴
+            val opTop = -axisHeight + opCenterRelAxis - opLayout.height / 2f
+            val opBottom = opTop + opLayout.height
 
-            // 运算符在布局中的实际绘制区域（考虑 opDrawX 偏移后）
+            // ============ 步骤4: 计算上下限的水平位置 ============
+
             // 运算符的视觉右边缘位置
             val opVisualRight = opActualLeft
 
             // 上下限与积分符号之间的水平间距
             val limitSpacing = if (isIntegral) {
-                with(density) { (context.fontSize * 0.05f).toPx() }  // 减小间距使布局更紧凑
+                with(density) { (context.fontSize * 0.0f).toPx() }  // 紧贴积分符号,无额外间距
             } else if (isNamedOperator) {
                 with(density) { (context.fontSize * 0.03f).toPx() }  // 命名运算符（如 lim）使用更小的间距
             } else {
@@ -499,71 +604,51 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
             }
 
             // 计算上下限的水平位置
-            // 关键：积分符号是倾斜的（从左上到右下），因此：
-            // - 上限：在顶部位置，需要相对于积分视觉右边缘偏移
-            // - 下限：在底部位置，由于倾斜，实际上已经更靠右，所以偏移量更小
-            val superX = if (isIntegral) {
-                opVisualRight + limitSpacing
-            } else {
-                opVisualRight + limitSpacing
-            }
+            // 上下标都使用相同的 X 坐标,紧贴积分符号视觉右边缘
+            val superX = opVisualRight + limitSpacing
+            val subX = opVisualRight + limitSpacing
 
-            val subX = if (isIntegral) {
-                // 积分符号倾斜角度约为 15-20 度
-                // 从顶部到底部的水平偏移约为 height * tan(angle) ≈ height * 0.3
-                // 因此下限需要向左回退以贴近积分符号底部
-                opVisualRight + limitSpacing - with(density) { (context.fontSize * 0.18f).toPx() }
-            } else {
-                opVisualRight + limitSpacing
-            }
+            // ============ 步骤5: 计算上下限的垂直位置 ============
 
-            // ============ 步骤3: 计算上下限的垂直位置（基线对齐） ============
-
-            val superRelBase = if (isIntegral) {
-                if (superLayout != null) {
-                    // 上限文本顶部对齐积分符号顶部
-                    // 文本顶部 = 基线 - baseline
-                    // 因此：基线 = opTop + baseline
-                    opTop + superLayout.baseline
-                } else {
-                    -opLayout.height * 0.45f - axisHeight
-                }
-            } else {
-                -opLayout.height * 0.45f - axisHeight
-            }
-
-            val subRelBase = if (isIntegral) {
-                if (subLayout != null) {
-                    // 下限文本底部对齐积分符号底部
-                    // 文本底部 = 基线 + (height - baseline)
-                    // 因此：基线 = opBottom - (height - baseline)
-                    opBottom - (subLayout.height - subLayout.baseline)
-                } else {
-                    opLayout.height * 0.35f - axisHeight
-                }
+            val limitGap = if (isIntegral) {
+                with(density) { (context.fontSize * 0.0f).toPx() }  // 积分符号与上下限之间的垂直间距
             } else if (isNamedOperator) {
-                // 命名运算符（如 lim）的下标位置：更靠近符号底部
-                if (subLayout != null) {
-                    val gap = with(density) { (context.fontSize * 0.05f).toPx() }  // 极小的垂直间距
-                    opBottom + gap
-                } else {
-                    opLayout.height * 0.35f - axisHeight
-                }
+                with(density) { (context.fontSize * 0.05f).toPx() }  // 命名运算符使用更小的间距
             } else {
-                opLayout.height * 0.35f - axisHeight
+                with(density) { (context.fontSize * 0.1f).toPx() }
             }
 
-            // ============ 步骤4: 计算总体布局尺寸 ============
+            val superTop = if (superLayout != null) {
+                // 积分符号:上标的顶部与积分符号顶部对齐
+                if (isIntegral) {
+                    opTop
+                } else {
+                    // 其他运算符:上限紧贴运算符顶部
+                    opTop - superLayout.height - limitGap
+                }
+            } else {
+                opTop
+            }
 
-            val superTop = if (superLayout != null) superRelBase - superLayout.baseline else opTop
-            val subBottom =
-                if (subLayout != null) subRelBase + (subLayout.height - subLayout.baseline) else opBottom
+            val subTop = if (subLayout != null) {
+                // 积分符号:下标的底部与积分符号底部对齐
+                if (isIntegral) {
+                    opBottom - subLayout.height
+                } else {
+                    // 其他运算符:下限紧贴运算符底部
+                    opBottom + limitGap
+                }
+            } else {
+                opBottom
+            }
 
-            val maxTop = min(opTop, superTop)
-            val maxBottom = max(opBottom, subBottom)
+            // ============ 步骤6: 计算总体布局尺寸 ============
 
-            val totalHeight = maxBottom - maxTop
-            val baseline = -maxTop
+            val minTop = if (superLayout != null) superTop else opTop
+            val maxBottom = if (subLayout != null) subTop + subLayout.height else opBottom
+
+            val totalHeight = maxBottom - minTop
+            val baseline = -minTop  // 基线位于顶部
 
             // 总宽度：积分符号实际宽度 + 上下限超出部分
             val superRightEdge = superX + (superLayout?.width ?: 0f)
@@ -571,13 +656,12 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
             val width = max(opActualLeft * 1.1f, max(superRightEdge, subRightEdge))
 
             return NodeLayout(width, totalHeight, baseline) { x, y ->
-                opLayout.draw(this, x + opDrawX, y + baseline + opRelBase)
-                superLayout?.draw(
-                    this,
-                    x + superX,
-                    y + baseline + superRelBase - superLayout.baseline
-                )
-                subLayout?.draw(this, x + subX, y + baseline + subRelBase - subLayout.baseline)
+                // 绘制运算符（相对于数学轴居中）
+                opLayout.draw(this, x + opDrawX, y + baseline + opTop)
+                
+                // 绘制上下限
+                superLayout?.draw(this, x + superX, y + baseline + superTop)
+                subLayout?.draw(this, x + subX, y + baseline + subTop)
             }
         } else {
             // 显示模式：上下标在正上方和正下方
@@ -633,38 +717,30 @@ internal class MathMeasurer : NodeMeasurer<LatexNode> {
         val center = numLayout.height + gap / 2f
         val baseline = center + axisHeight
 
-        val bracketWidth = with(density) { (context.fontSize * 0.4f).toPx() }
-        val strokeWidth = with(density) { (context.fontSize * 0.05f).toPx() }
-        val width = contentWidth + bracketWidth * 2
+        // 使用字体渲染括号（而不是 Path）
+        val leftLayout = measureDelimiterScaled("(", context, measurer, height)
+        val rightLayout = measureDelimiterScaled(")", context, measurer, height)
+
+        val width = leftLayout.width + contentWidth + rightLayout.width
 
         return NodeLayout(width, height, baseline) { x, y ->
-            // 绘制左右括号
-            drawBracket(
-                LatexNode.Matrix.MatrixType.PAREN,
-                Side.LEFT,
-                x,
-                y,
-                bracketWidth,
-                height,
-                strokeWidth,
-                context.color
-            )
-            drawBracket(
-                LatexNode.Matrix.MatrixType.PAREN,
-                Side.RIGHT,
-                x + width - bracketWidth,
-                y,
-                bracketWidth,
-                height,
-                strokeWidth,
-                context.color
-            )
+            // 计算数学轴的绝对 Y 坐标
+            val axisHeight = LayoutUtils.getAxisHeight(density, context, measurer)
+            val contentAxisY = y + baseline - axisHeight
+
+            // 绘制左侧括号:括号的几何中心应该对齐到数学轴
+            val leftDelimiterTopY = contentAxisY - leftLayout.height / 2f
+            leftLayout.draw(this, x, leftDelimiterTopY)
 
             // 绘制内容
-            val numX = x + bracketWidth + (contentWidth - numLayout.width) / 2
-            val denX = x + bracketWidth + (contentWidth - denLayout.width) / 2
+            val numX = x + leftLayout.width + (contentWidth - numLayout.width) / 2
+            val denX = x + leftLayout.width + (contentWidth - denLayout.width) / 2
             numLayout.draw(this, numX, y)
             denLayout.draw(this, denX, y + numLayout.height + gap)
+
+            // 绘制右侧括号:与左侧相同的逻辑
+            val rightDelimiterTopY = contentAxisY - rightLayout.height / 2f
+            rightLayout.draw(this, x + leftLayout.width + contentWidth, rightDelimiterTopY)
         }
     }
 }

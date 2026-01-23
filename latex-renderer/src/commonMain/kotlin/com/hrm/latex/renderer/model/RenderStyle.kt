@@ -42,7 +42,8 @@ data class LatexConfig(
     val darkColor: Color = Color.White,
     val backgroundColor: Color = Color.Transparent,
     val darkBackgroundColor: Color = Color.Transparent,
-    val baseFontFamily: FontFamily? = FontFamily.Serif
+    val baseFontFamily: FontFamily? = null,
+    val fontFamilies: LatexFontFamilies? = null
 )
 
 /**
@@ -53,8 +54,10 @@ internal data class RenderContext(
     val color: Color,
     val fontWeight: FontWeight? = null,
     val fontStyle: FontStyle? = null,
-    val fontFamily: FontFamily? = FontFamily.Serif,
+    val fontFamily: FontFamily? = null,
     val fontVariant: FontVariant = FontVariant.NORMAL,
+    val fontFamilies: LatexFontFamilies? = null,
+    val isVariantFontFamily: Boolean = false,
     val mathStyle: MathStyleMode = MathStyleMode.DISPLAY,
     val bigOpHeightHint: Float? = null // 大型运算符（如积分）的高度暗示
 ) {
@@ -87,7 +90,9 @@ internal fun LatexConfig.toContext(isDark: Boolean): RenderContext {
     return RenderContext(
         fontSize = fontSize,
         color = resolvedColor,
-        fontFamily = baseFontFamily
+        fontFamily = baseFontFamily,
+        fontFamilies = fontFamilies,
+        isVariantFontFamily = false
     )
 }
 
@@ -107,22 +112,69 @@ internal fun RenderContext.withColor(colorString: String): RenderContext =
         copy(color = it)
     } ?: this
 
-internal fun RenderContext.applyStyle(styleType: LatexNode.Style.StyleType): RenderContext =
-    when (styleType) {
-        LatexNode.Style.StyleType.BOLD, LatexNode.Style.StyleType.BOLD_SYMBOL -> copy(fontWeight = FontWeight.Bold)
+internal fun RenderContext.applyStyle(styleType: LatexNode.Style.StyleType): RenderContext {
+    val families = fontFamilies
+
+    return when (styleType) {
+        LatexNode.Style.StyleType.BOLD, LatexNode.Style.StyleType.BOLD_SYMBOL -> this
         LatexNode.Style.StyleType.ITALIC -> copy(fontStyle = FontStyle.Italic)
         LatexNode.Style.StyleType.ROMAN -> copy(
             fontStyle = FontStyle.Normal,
-            fontFamily = FontFamily.Serif
+            fontFamily = families?.roman ?: fontFamily,
+            isVariantFontFamily = false
         )
 
-        LatexNode.Style.StyleType.SANS_SERIF -> copy(fontFamily = FontFamily.SansSerif)
-        LatexNode.Style.StyleType.MONOSPACE -> copy(fontFamily = FontFamily.Monospace)
-        LatexNode.Style.StyleType.BLACKBOARD_BOLD -> copy(fontVariant = RenderContext.FontVariant.BLACKBOARD_BOLD)
-        LatexNode.Style.StyleType.CALLIGRAPHIC -> copy(fontVariant = RenderContext.FontVariant.CALLIGRAPHIC)
-        LatexNode.Style.StyleType.FRAKTUR -> copy(fontVariant = RenderContext.FontVariant.FRAKTUR)
-        LatexNode.Style.StyleType.SCRIPT -> copy(fontVariant = RenderContext.FontVariant.SCRIPT)
+        LatexNode.Style.StyleType.SANS_SERIF -> copy(
+            fontFamily = families?.sansSerif ?: fontFamily,
+            isVariantFontFamily = false
+        )
+
+        LatexNode.Style.StyleType.MONOSPACE -> copy(
+            fontFamily = families?.monospace ?: fontFamily,
+            isVariantFontFamily = false
+        )
+
+        LatexNode.Style.StyleType.BLACKBOARD_BOLD -> {
+            val variantFamily = families?.blackboardBold
+            copy(
+                fontVariant = RenderContext.FontVariant.BLACKBOARD_BOLD,
+                fontFamily = variantFamily ?: fontFamily,
+                fontStyle = FontStyle.Normal,
+                isVariantFontFamily = variantFamily != null
+            )
+        }
+
+        LatexNode.Style.StyleType.CALLIGRAPHIC -> {
+            val variantFamily = families?.calligraphic
+            copy(
+                fontVariant = RenderContext.FontVariant.CALLIGRAPHIC,
+                fontFamily = variantFamily ?: fontFamily,
+                fontStyle = FontStyle.Normal,
+                isVariantFontFamily = variantFamily != null
+            )
+        }
+
+        LatexNode.Style.StyleType.FRAKTUR -> {
+            val variantFamily = families?.fraktur
+            copy(
+                fontVariant = RenderContext.FontVariant.FRAKTUR,
+                fontFamily = variantFamily ?: fontFamily,
+                fontStyle = FontStyle.Normal,
+                isVariantFontFamily = variantFamily != null
+            )
+        }
+
+        LatexNode.Style.StyleType.SCRIPT -> {
+            val variantFamily = families?.script
+            copy(
+                fontVariant = RenderContext.FontVariant.SCRIPT,
+                fontFamily = variantFamily ?: fontFamily,
+                fontStyle = FontStyle.Normal,
+                isVariantFontFamily = variantFamily != null
+            )
+        }
     }
+}
 
 /**
  * 应用数学模式（内部命令触发）

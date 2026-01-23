@@ -85,6 +85,11 @@ val basicLatexPreviewGroups = listOf(
                 "导数 (\\left \\right)",
                 "\\frac{d}{dx}\\left(x^n\\right) = nx^{n-1}"
             ),
+            PreviewItem(
+                "18c",
+                "括号中的积分",
+                "\\left[ \\int_0^1 \\frac{dx}{\\sqrt{1-x^2}} \\right] = \\frac{\\pi}{2}"
+            ),
         )
     ),
     PreviewGroup(
@@ -396,7 +401,7 @@ val basicLatexPreviewGroups = listOf(
     PreviewGroup(
         id = "environments",
         title = "10. 环境专题",
-        description = "split、multline、eqnarray、subequations 环境",
+        description = "split、multline、eqnarray、subequations、cases 环境",
         items = listOf(
             PreviewItem("76", "split 基础", "\\begin{split} x &= a + b \\\\ &= c \\end{split}"),
             PreviewItem("77", "split 多行", "\\begin{split} a &= b + c \\\\ &= d + e \\\\ &= f \\end{split}"),
@@ -406,6 +411,9 @@ val basicLatexPreviewGroups = listOf(
             PreviewItem("81", "eqnarray 三列", "\\begin{eqnarray} a + b &=& c \\\\ d - e &=& f \\end{eqnarray}"),
             PreviewItem("82", "subequations", "\\begin{subequations} a = b \\end{subequations}"),
             PreviewItem("83", "混合环境", "\\begin{align} x &= 1 \\\\ y &= 2 \\end{align}"),
+            PreviewItem("84", "cases 基础", "f(x) = \\begin{cases} x^2 & \\text{if } x > 0 \\\\ 0 & \\text{if } x = 0 \\\\ -x^2 & \\text{if } x < 0 \\end{cases}"),
+            PreviewItem("85", "cases 简单", "y = \\begin{cases} 1 & x > 0 \\\\ 0 & x = 0 \\\\ -1 & x < 0 \\end{cases}"),
+            PreviewItem("86", "cases 嵌套分数", "|x| = \\begin{cases} \\frac{x}{1} & x \\geq 0 \\\\ \\frac{-x}{1} & x < 0 \\end{cases}"),
         )
     ),
 )

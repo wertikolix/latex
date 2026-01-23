@@ -23,14 +23,19 @@
 
 package com.hrm.latex.renderer.layout.measurer
 
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
 import com.hrm.latex.parser.model.LatexNode
 import com.hrm.latex.renderer.layout.NodeLayout
 import com.hrm.latex.renderer.model.RenderContext
+import com.hrm.latex.renderer.model.textStyle
 import com.hrm.latex.renderer.utils.LayoutUtils
-import com.hrm.latex.renderer.utils.Side
-import com.hrm.latex.renderer.utils.drawBracket
 import kotlin.math.max
 
 /**
@@ -39,6 +44,89 @@ import kotlin.math.max
 internal class MatrixMeasurer : NodeMeasurer<LatexNode> {
 
     enum class ColumnAlignment { LEFT, CENTER, RIGHT }
+
+    /**
+     * 将 MatrixType 映射到对应的 Unicode 括号字符
+     */
+    private fun getDelimiterChar(type: LatexNode.Matrix.MatrixType, isLeft: Boolean): String {
+        return when (type) {
+            LatexNode.Matrix.MatrixType.PAREN -> if (isLeft) "(" else ")"
+            LatexNode.Matrix.MatrixType.BRACKET -> if (isLeft) "[" else "]"
+            LatexNode.Matrix.MatrixType.BRACE -> if (isLeft) "{" else "}"
+            LatexNode.Matrix.MatrixType.VBAR -> "|"
+            LatexNode.Matrix.MatrixType.DOUBLE_VBAR -> "‖"
+            LatexNode.Matrix.MatrixType.PLAIN -> ""
+        }
+    }
+
+    /**
+     * 获取定界符的渲染上下文（使用 symbol 字体）
+     */
+    private fun delimiterContext(
+        context: RenderContext,
+        scale: Float = 1.0f
+    ): RenderContext {
+        // 根据缩放比例动态调整 fontWeight (100-400)
+        val weight = when {
+            scale <= 1.0f -> 400  // 正常大小
+            scale >= 2.5f -> 100  // 很高的括号，使用最细
+            else -> {
+                val t = (scale - 1.0f) / 1.5f
+                (400 - t * 300).toInt().coerceIn(100, 400)
+            }
+        }
+
+        val fontWeight = FontWeight(weight)
+
+        return context.copy(
+            fontStyle = FontStyle.Normal,
+            fontFamily = context.fontFamilies?.symbol ?: context.fontFamily,
+            fontWeight = fontWeight
+        )
+    }
+
+    /**
+     * 测量并缩放定界符
+     */
+    private fun measureDelimiterScaled(
+        delimiter: String,
+        context: RenderContext,
+        measurer: TextMeasurer,
+        targetHeight: Float
+    ): NodeLayout {
+        // 先用默认 weight 测量获取基础高度
+        val baseContext = delimiterContext(context)
+        val baseStyle = baseContext.textStyle()
+        val baseResult = measurer.measure(AnnotatedString(delimiter), baseStyle)
+        
+        if (baseResult.size.height <= 0f || targetHeight <= 0f) {
+            return NodeLayout(
+                baseResult.size.width.toFloat(),
+                baseResult.size.height.toFloat(),
+                baseResult.firstBaseline
+            ) { x, y ->
+                drawText(baseResult, topLeft = Offset(x, y))
+            }
+        }
+
+        val scale = targetHeight / baseResult.size.height
+
+        // 根据实际缩放比例重新测量（应用动态 fontWeight）
+        val adjustedContext = delimiterContext(context, scale)
+        val adjustedStyle = adjustedContext.textStyle()
+        val adjustedResult = measurer.measure(AnnotatedString(delimiter), adjustedStyle)
+
+        // 使用 Canvas scale 而不是字体大小缩放，避免笔画变粗
+        return NodeLayout(
+            width = adjustedResult.size.width * scale,
+            height = targetHeight,
+            baseline = adjustedResult.firstBaseline * scale
+        ) { x, y ->
+            scale(scale, scale, pivot = Offset(x, y)) {
+                drawText(adjustedResult, topLeft = Offset(x, y))
+            }
+        }
+    }
 
     override fun measure(
         node: LatexNode,
@@ -78,17 +166,48 @@ internal class MatrixMeasurer : NodeMeasurer<LatexNode> {
         val bracketType = node.type
         if (bracketType == LatexNode.Matrix.MatrixType.PLAIN) return contentLayout
 
-        val bracketWidth = with(density) { (context.fontSize * 0.5f).toPx() }
-        val strokeWidth = with(density) { (context.fontSize * 0.05f).toPx() }
+        // 使用字体渲染括号（而不是 Path）
+        val leftChar = getDelimiterChar(bracketType, isLeft = true)
+        val rightChar = getDelimiterChar(bracketType, isLeft = false)
 
-        val width = contentLayout.width + bracketWidth * 2
+        val leftLayout = if (leftChar.isNotEmpty()) {
+            measureDelimiterScaled(leftChar, context, measurer, contentLayout.height)
+        } else null
+
+        val rightLayout = if (rightChar.isNotEmpty()) {
+            measureDelimiterScaled(rightChar, context, measurer, contentLayout.height)
+        } else null
+
+        val leftW = leftLayout?.width ?: 0f
+        val rightW = rightLayout?.width ?: 0f
+
+        val width = leftW + contentLayout.width + rightW
         val height = contentLayout.height
         val baseline = contentLayout.baseline
 
         return NodeLayout(width, height, baseline) { x, y ->
-            drawBracket(bracketType, Side.LEFT, x, y, bracketWidth, height, strokeWidth, context.color)
-            contentLayout.draw(this, x + bracketWidth, y)
-            drawBracket(bracketType, Side.RIGHT, x + width - bracketWidth, y, bracketWidth, height, strokeWidth, context.color)
+            var curX = x
+
+            // 计算数学轴的绝对 Y 坐标
+            val axisHeight = LayoutUtils.getAxisHeight(density, context, measurer)
+            val contentAxisY = y + baseline - axisHeight
+
+            // 绘制左侧括号:括号的几何中心应该对齐到数学轴
+            if (leftLayout != null) {
+                val delimiterTopY = contentAxisY - leftLayout.height / 2f
+                leftLayout.draw(this, curX, delimiterTopY)
+                curX += leftLayout.width
+            }
+
+            // 绘制内容
+            contentLayout.draw(this, curX, y)
+            curX += contentLayout.width
+
+            // 绘制右侧括号:与左侧相同的逻辑
+            if (rightLayout != null) {
+                val delimiterTopY = contentAxisY - rightLayout.height / 2f
+                rightLayout.draw(this, curX, delimiterTopY)
+            }
         }
     }
 
@@ -175,12 +294,25 @@ internal class MatrixMeasurer : NodeMeasurer<LatexNode> {
         val matrixLayout = measureMatrixLike(rows, context, measurer, density, measureGlobal, 
             alignments = listOf(ColumnAlignment.LEFT, ColumnAlignment.CENTER, ColumnAlignment.LEFT))
         
-        val bracketWidth = with(density) { (context.fontSize * 0.5f).toPx() }
-        val strokeWidth = with(density) { (context.fontSize * 0.05f).toPx() }
+        // 使用字体渲染大括号（而不是 Path）
+        val leftChar = getDelimiterChar(LatexNode.Matrix.MatrixType.BRACE, isLeft = true)
+        val leftLayout = measureDelimiterScaled(leftChar, context, measurer, matrixLayout.height)
 
-        return NodeLayout(bracketWidth + matrixLayout.width, matrixLayout.height, matrixLayout.baseline) { x, y ->
-            drawBracket(LatexNode.Matrix.MatrixType.BRACE, Side.LEFT, x, y, bracketWidth, matrixLayout.height, strokeWidth, context.color)
-            matrixLayout.draw(this, x + bracketWidth, y)
+        val width = leftLayout.width + matrixLayout.width
+        val height = matrixLayout.height
+        val baseline = matrixLayout.baseline
+
+        return NodeLayout(width, height, baseline) { x, y ->
+            // 计算数学轴的绝对 Y 坐标
+            val axisHeight = LayoutUtils.getAxisHeight(density, context, measurer)
+            val contentAxisY = y + baseline - axisHeight
+
+            // 绘制左侧大括号:括号的几何中心应该对齐到数学轴
+            val delimiterTopY = contentAxisY - leftLayout.height / 2f
+            leftLayout.draw(this, x, delimiterTopY)
+            
+            // 绘制内容
+            matrixLayout.draw(this, x + leftLayout.width, y)
         }
     }
 
