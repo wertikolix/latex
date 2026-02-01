@@ -139,6 +139,28 @@ internal fun measureGroup(
         return measureVerticalLines(lines, context, measurer, density)
     }
 
+    // automatic line breaking when enabled and maxWidth is set
+    val maxWidth = context.maxLineWidth
+    if (context.lineBreakingEnabled && maxWidth != null && nodes.isNotEmpty()) {
+        val layouts = nodes.map { measureNode(it, context, measurer, density) }
+        val widths = FloatArray(layouts.size) { layouts[it].width }
+
+        var totalWidth = 0f
+        for (w in widths) totalWidth += w
+
+        if (totalWidth > maxWidth) {
+            val lineBreaker = LineBreaker(maxWidth)
+            val brokenLines = lineBreaker.breakIntoLines(nodes, widths)
+
+            if (brokenLines.size > 1) {
+                val lineNodeLists = brokenLines.map { indices ->
+                    indices.map { nodes[it] }
+                }
+                return measureVerticalLines(lineNodeLists, context.copy(lineBreakingEnabled = false), measurer, density)
+            }
+        }
+    }
+
     // 单行 (InlineRow)
     // 第一遍测量：获取所有节点的初步尺寸
     val initialLayouts = nodes.map { measureNode(it, context, measurer, density) }
