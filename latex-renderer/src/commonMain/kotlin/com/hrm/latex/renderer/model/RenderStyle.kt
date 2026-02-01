@@ -52,14 +52,10 @@ data class LatexConfig(
  *
  * @property enabled whether automatic line breaking is enabled
  * @property maxWidth maximum line width in pixels, null means no limit
- * @property breakAfterRelations break after relation symbols (=, <, > etc)
- * @property breakAfterOperators break after operators (+, - etc)
  */
 data class LineBreakingConfig(
     val enabled: Boolean = false,
-    val maxWidth: Float? = null,
-    val breakAfterRelations: Boolean = true,
-    val breakAfterOperators: Boolean = true
+    val maxWidth: Float? = null
 )
 
 /**

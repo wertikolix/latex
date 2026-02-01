@@ -695,6 +695,11 @@ class CommandParser(
                     node.below?.let { replaceParametersInNode(it, args) },
                     node.direction
                 ))
+                is LatexNode.Binomial -> listOf(LatexNode.Binomial(
+                    replaceParametersInNode(node.top, args),
+                    replaceParametersInNode(node.bottom, args),
+                    node.style
+                ))
                 else -> listOf(node)
             }
         }

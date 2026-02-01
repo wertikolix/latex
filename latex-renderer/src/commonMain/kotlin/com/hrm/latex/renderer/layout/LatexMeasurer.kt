@@ -141,6 +141,8 @@ internal fun measureGroup(
 
     // automatic line breaking when enabled and maxWidth is set
     val maxWidth = context.maxLineWidth
+    var precomputedLayouts: List<NodeLayout>? = null
+
     if (context.lineBreakingEnabled && maxWidth != null && nodes.isNotEmpty()) {
         val layouts = nodes.map { measureNode(it, context, measurer, density) }
         val widths = FloatArray(layouts.size) { layouts[it].width }
@@ -159,11 +161,14 @@ internal fun measureGroup(
                 return measureVerticalLines(lineNodeLists, context.copy(lineBreakingEnabled = false), measurer, density)
             }
         }
+
+        // reuse layouts if no line break occurred
+        precomputedLayouts = layouts
     }
 
     // 单行 (InlineRow)
     // 第一遍测量：获取所有节点的初步尺寸
-    val initialLayouts = nodes.map { measureNode(it, context, measurer, density) }
+    val initialLayouts = precomputedLayouts ?: nodes.map { measureNode(it, context, measurer, density) }
 
     // 检查是否存在需要根据内容调整高度的大型运算符（如积分）
     val hasIntegrals = nodes.any { it is LatexNode.BigOperator && it.operator.contains("int") }

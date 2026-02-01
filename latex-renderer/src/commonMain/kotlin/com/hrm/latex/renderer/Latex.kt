@@ -163,9 +163,7 @@ fun LatexAutoWrap(
         val wrappingConfig = config.copy(
             lineBreaking = LineBreakingConfig(
                 enabled = true,
-                maxWidth = maxWidthPx,
-                breakAfterRelations = config.lineBreaking.breakAfterRelations,
-                breakAfterOperators = config.lineBreaking.breakAfterOperators
+                maxWidth = maxWidthPx
             )
         )
 
