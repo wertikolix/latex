@@ -85,30 +85,55 @@ internal class AccentMeasurer : NodeMeasurer<LatexNode.Accent> {
         val textStyle = accentStyle.textStyle()
         val result = measurer.measure(AnnotatedString(accentChar), textStyle)
         
+        val (accentHeightScale, accentOffsetScale) = when (node.accentType) {
+            AccentType.HAT -> 0.52f to 0.20f
+            AccentType.TILDE -> 0.48f to 0.13f
+            AccentType.BAR -> 0.22f to 0.12f
+            AccentType.VEC -> 0.46f to 0.0f
+            AccentType.DOT -> 0.26f to 0.15f
+            AccentType.DDOT -> 0.30f to 0.15f
+            else -> 0.45f to 0.24f
+        }
+
+        val lineTop = result.getLineTop(0)
+        val accentHeight = with(density) { (context.fontSize * accentHeightScale).toPx() }
+        val accentBaseline = min(result.firstBaseline - lineTop, accentHeight)
+
         val accentLayout = NodeLayout(
             result.size.width.toFloat(),
-            result.size.height.toFloat(),
-            result.firstBaseline
+            accentHeight,
+            accentBaseline
         ) { x, y ->
-            drawText(result, topLeft = Offset(x, y))
+            drawText(result, topLeft = Offset(x, y - lineTop))
         }
 
         val width = max(contentLayout.width, accentLayout.width)
-        val totalHeight = contentLayout.height + accentLayout.height
+        val accentDownOffset = min(
+            accentHeight * 0.9f,
+            with(density) { (context.fontSize * accentOffsetScale).toPx() }
+        )
+        val totalHeight = contentLayout.height + accentHeight - accentDownOffset
 
         return NodeLayout(
-            width, totalHeight, contentLayout.baseline + (if (isUnder) 0f else accentLayout.height)
+            width,
+            totalHeight,
+            contentLayout.baseline + (if (isUnder) 0f else accentLayout.height - accentDownOffset)
         ) { x, y ->
             val centerX = x + width / 2
             val contentX = centerX - contentLayout.width / 2
-            val accentX = centerX - accentLayout.width / 2
+            
+            // 上方装饰符号向右偏移以补偿斜体效果
+            val italicCorrection = if (!isUnder) {
+                with(density) { (context.fontSize * 0.08f).toPx() }
+            } else 0f
+            val accentX = centerX - accentLayout.width / 2 + italicCorrection
 
             if (isUnder) {
                 contentLayout.draw(this, contentX, y)
                 accentLayout.draw(this, accentX, y + contentLayout.height)
             } else {
-                accentLayout.draw(this, accentX, y)
-                contentLayout.draw(this, contentX, y + accentLayout.height)
+                accentLayout.draw(this, accentX, y + accentDownOffset)
+                contentLayout.draw(this, contentX, y + accentLayout.height - accentDownOffset)
             }
         }
     }
@@ -127,11 +152,19 @@ internal class AccentMeasurer : NodeMeasurer<LatexNode.Accent> {
         val isUnder = node.accentType == AccentType.UNDERLINE ||
                 node.accentType == AccentType.UNDERBRACE
 
+        val isArrowAccent = node.accentType == AccentType.OVERRIGHTARROW ||
+                node.accentType == AccentType.OVERLEFTARROW
+
         val accentHeight = when (node.accentType) {
             AccentType.OVERLINE, AccentType.UNDERLINE -> with(density) { 2f.dp.toPx() }
+            AccentType.OVERRIGHTARROW, AccentType.OVERLEFTARROW ->
+                with(density) { (context.fontSize * 0.18f).toPx() }
             else -> with(density) { (context.fontSize * 0.3f).toPx() }
         }
-        val gap = with(density) { (context.fontSize * 0.08f).toPx() }
+        val gap = when {
+            isArrowAccent -> with(density) { (context.fontSize * 0.02f).toPx() }
+            else -> with(density) { (context.fontSize * 0.08f).toPx() }
+        }
 
         val width = contentLayout.width
         val totalHeight = contentLayout.height + accentHeight + gap
