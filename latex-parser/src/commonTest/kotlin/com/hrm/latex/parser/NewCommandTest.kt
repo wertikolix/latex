@@ -302,4 +302,33 @@ class NewCommandTest {
         val binomial = lastNode.children.find { it is LatexNode.Binomial }
         assertTrue(binomial != null, "should contain Binomial after expansion")
     }
+
+    @Test
+    fun should_handle_lone_hash_in_definition() {
+        // regression test: lone # or # not followed by digit should not cause infinite loop
+        val parser = LatexParser()
+        val input = "\\newcommand{\\test}{a # b} \\test"
+        val result = parser.parse(input)
+
+        // should complete without hanging
+        assertTrue(result.children.isNotEmpty())
+    }
+
+    @Test
+    fun should_handle_hash_at_end_of_definition() {
+        val parser = LatexParser()
+        val input = "\\newcommand{\\test}{text#} \\test"
+        val result = parser.parse(input)
+
+        assertTrue(result.children.isNotEmpty())
+    }
+
+    @Test
+    fun should_handle_hash_followed_by_letter() {
+        val parser = LatexParser()
+        val input = "\\newcommand{\\test}{#a test} \\test"
+        val result = parser.parse(input)
+
+        assertTrue(result.children.isNotEmpty())
+    }
 }

@@ -603,6 +603,10 @@ class CommandParser(
                                     result.add(LatexNode.Text("#${text[i + 1]}"))
                                 }
                                 i += 2
+                            } else if (text[i] == '#') {
+                                // lone # or # not followed by digit - treat as literal
+                                result.add(LatexNode.Text("#"))
+                                i++
                             } else {
                                 val start = i
                                 while (i < text.length && text[i] != '#') i++
