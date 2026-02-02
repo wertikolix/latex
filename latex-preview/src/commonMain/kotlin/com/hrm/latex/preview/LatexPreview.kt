@@ -105,6 +105,13 @@ val previewCategories = listOf(
         icon = "⚗️",
         groups = chemicalPreviewGroups
     ),
+    PreviewCategory(
+        id = "linebreaking",
+        title = "Line Breaking",
+        description = "automatic line breaking and edge case fixes",
+        icon = "↩️",
+        groups = lineBreakingPreviewGroups
+    ),
 )
 
 // ========== 主界面 ==========
